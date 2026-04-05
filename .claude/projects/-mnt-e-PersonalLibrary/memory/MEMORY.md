@@ -1,0 +1,1 @@
+- [Keep __main__ minimal](feedback_main_block.md) — __main__ should only call main(); all logic goes in def main()

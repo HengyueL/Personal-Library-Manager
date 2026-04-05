@@ -1,23 +1,41 @@
 """
     Starter script for querying PersonalLibrary with RAG.
 
-    Run:
-        python main.py
+    Usage:
+        python retrieve_document.py "your question here"
+        python retrieve_document.py "your question here" --top-k 3 --no-answer
 """
+
+import argparse
+import logging
 
 from RAG import query
 
-if __name__ == "__main__":
-    user_query = "what is harness design for long-running agent applications?"
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
-    print(f"Query: {user_query}\n")
-    result = query(user_query, top_k_docs=5, synthesize=True)
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
 
-    print("\n=== Sources ===")
+
+def main():
+    parser = argparse.ArgumentParser(description="Query the PersonalLibrary RAG system.")
+    parser.add_argument("--query", type=str, required=True, help="Natural language query")
+    parser.add_argument("--top-k", type=int, default=5, help="Number of source documents to retrieve (default: 5)")
+    parser.add_argument("--no-answer", action="store_true", help="Skip LLM answer synthesis, retrieval only")
+    args = parser.parse_args()
+
+    logger.info("Query: %s", args.query)
+    result = query(args.query, top_k_docs=args.top_k, synthesize=not args.no_answer)
+    if result["answer"]:
+        print(f"\n{YELLOW}=== References ==={RESET}")
+        print(f"\n{YELLOW}{result['answer']}{RESET}")
+
+    print(f"\n{GREEN}=== References ==={RESET}")
     for i, doc in enumerate(result["sources"], start=1):
-        print(f"{i}. [{doc['score']:.2f}] {doc['file_name']}")
-        if doc["url"]:
-            print(f"   {doc['url']}")
+        print(f"{GREEN}{i}. [{doc['score']:.2f}] {doc['file_name']}{RESET} \n")
 
-    print("\n=== Answer ===")
-    print(result["answer"])
+
+if __name__ == "__main__":
+    main()

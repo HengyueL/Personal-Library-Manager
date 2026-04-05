@@ -1,6 +1,7 @@
 requests
 html2text
 markdownify
+markitdown[pdf]
 openai
 chromadb
 sentence-transformers

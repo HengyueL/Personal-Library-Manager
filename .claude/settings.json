@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport sys, json, subprocess, re\ndata = json.load(sys.stdin)\nf = data.get('tool_input', {}).get('file_path', '')\nif re.search(r'/(utils|RAG)/[^/]+\\\\.py$', f):\n    result = subprocess.run(['/mnt/e/PersonalLibrary/.venv/bin/python', '-m', 'pytest', '/mnt/e/PersonalLibrary/tests/', '-q'], capture_output=True, text=True)\n    out = result.stdout[-3000:] if len(result.stdout) > 3000 else result.stdout\n    print(json.dumps({'systemMessage': out}))\n\" 2>/dev/null || true",
+            "timeout": 60,
+            "statusMessage": "Running tests..."
+          }
+        ]
+      }
+    ]
+  }
+}

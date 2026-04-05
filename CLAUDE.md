@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Setup
 
 ```bash
-# Activate virtual environment
+# Create and activate virtual environment
+python -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies
@@ -19,19 +20,39 @@ pip install -r requirements.txt
 export HF_TOKEN=<your_huggingface_token>
 ```
 
+## Running Tests
+
+This project uses `pytest`. Because the venv has no `pip` symlink, invoke Python directly via `uv` or the venv binary:
+
+```bash
+# Preferred: via uv
+uv run python -m pytest tests/ -q
+
+# Alternative: direct venv binary
+.venv/bin/python -m pytest tests/ -q
+
+# Install pytest if missing (first time)
+.venv/bin/python -m ensurepip && .venv/bin/pip3 install pytest
+```
+
+A **PostToolUse hook** (`.claude/settings.json`) runs `pytest` automatically after every edit to a `utils/` or `RAG/` Python file. Test results appear as a system message.
+
 ## Common Commands
 
 ```bash
-# Add a new document (edit URL and FILE_NAME inside the script first)
-python add_document.py
+# Add a new document (HTML or PDF — detected automatically)
+python add_document.py --url https://example.com/article --file_name My_Article.md
+python add_document.py --url https://arxiv.org/pdf/2303.08774 --file_name Paper.md
 
 # Query the RAG system
-python retrieve_document.py
+python retrieve_document.py "your question here"
+python retrieve_document.py "your question here" --top-k 3
+python retrieve_document.py "your question here" --no-answer
 
 # --- Individual steps ---
 
-# Fetch a document from a URL and save to doc_raw/
-python utils/fetch_html.py
+# Fetch a document (HTML or PDF) and save to doc_raw/
+python utils/fetch_document.py
 
 # Generate AI summaries for all documents in doc_raw/
 python utils/generate_summary.py
@@ -53,36 +74,38 @@ python RAG/query.py "your question here" --top-k 3
 
 ### Starter Scripts
 
-- **`add_document.py`** — Edit `URL` and `FILE_NAME` at the top, then run to fetch, summarize, update the relation table, and incrementally update the RAG index in one shot.
-- **`retrieve_document.py`** — Edit the `user_query` variable at the top, then run to query the RAG system and print ranked sources + synthesized answer.
+- **`add_document.py`** — Accepts `--url` and `--file_name` CLI args; auto-detects HTML vs PDF (by URL extension or `Content-Type` HEAD request), fetches and converts, summarizes, updates the relation table, and incrementally updates the RAG index in one shot.
+- **`retrieve_document.py`** — Accepts a positional query string plus `--top-k` and `--no-answer` flags; queries the RAG system and logs ranked sources + synthesized answer.
 
 ## Architecture
 
 ### Directory Structure
 - `doc_raw/` — Raw documents as markdown (with YAML frontmatter containing source URL)
 - `doc_summary/` — AI-generated summaries, parallel to `doc_raw/` (same filenames)
-- `utils/` — Standalone utility scripts (fetch, summarize, update index table)
+- `utils/` — Standalone utility scripts (fetch HTML/PDF, summarize, update index table)
 - `RAG/` — RAG system implementation
+- `tests/` — pytest test suite (`tests/RAG/`, `tests/utils/`)
 - `RAG/chroma_db/` — Persistent Chroma vector store (gitignored, auto-created)
+- `RAG/models/` — Project-local embedding model cache (gitignored, downloaded on first use)
 - `doc_relation_table.csv` — CSV metadata index: `index`, `file_name`, `orignal_url` (note: typo in column name is intentional/existing)
 
 ### Full Pipeline
 
 ```
-fetch_html.py → doc_raw/*.md
-                    ↓
-          generate_summary.py → doc_summary/*.md
-                    ↓
+fetch_document.py → doc_raw/*.md
+                        ↓
+            generate_summary.py → doc_summary/*.md
+                        ↓
         update_relation_table.py → doc_relation_table.csv
-                    ↓
-            RAG/index.py → RAG/chroma_db/
-                    ↓
-            RAG/query.py → ranked sources + synthesized answer
+                        ↓
+                RAG/index.py → RAG/chroma_db/
+                        ↓
+                RAG/query.py → ranked sources + synthesized answer
 ```
 
 ### Data Flow Details
 
-1. **`utils/fetch_html.py`** — Downloads HTML via `requests`, converts to markdown with `html2text`, prepends YAML frontmatter (`url: <source>`), saves to `doc_raw/<file_name>.md`. Refuses to overwrite existing files.
+1. **`utils/fetch_document.py`** — Auto-detects HTML vs PDF: checks URL extension (`.pdf`) then makes a HEAD request to inspect `Content-Type`. HTML is downloaded and converted with `html2text`; PDFs are downloaded to a temp file and converted with `markitdown`. Both paths prepend YAML frontmatter (`url: <source>`) and save to `doc_raw/<file_name>.md`. Refuses to overwrite existing files.
 
 2. **`utils/generate_summary.py`** — Reads from `doc_raw/`, calls HuggingFace Inference API (OpenAI-compatible client, model `openai/gpt-oss-120b`) to produce structured summaries, saves to `doc_summary/<file_name>.md`. Skips already-summarized documents.
 
@@ -126,4 +149,5 @@ url: https://example.com/original-source
 - `chromadb` — Local persistent vector store
 - `requests` — HTTP fetching
 - `html2text` / `markdownify` — HTML-to-markdown conversion
+- `markitdown[pdf]` — PDF-to-markdown conversion (used by `fetch_document.py` for PDF URLs)
 - `openai` — Client library (pointed at HuggingFace endpoint)

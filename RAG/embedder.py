@@ -1,19 +1,32 @@
-from RAG.config import EMBEDDING_MODEL
+import logging
+
+from RAG.config import EMBEDDING_MODEL, MODEL_CACHE_DIR
 
 _model = None
 
 
+def _is_cached(model_name: str) -> bool:
+    hub_dir = "models--" + model_name.replace("/", "--")
+    return (MODEL_CACHE_DIR / hub_dir).exists()
+
+
 def get_model():
     """
-    Lazy-load and cache the SentenceTransformer model.
-    Downloads ~80MB on first call; subsequent calls return the cached model.
+    Lazy-load and cache the SentenceTransformer model in-process.
+    On first ever run, downloads ~80MB to RAG/models/; subsequent runs load
+    from that project-local cache.
     """
     global _model
     if _model is None:
-        print(f"Loading embedding model '{EMBEDDING_MODEL}' (downloads ~80MB on first run)...")
+        for noisy in ("sentence_transformers", "httpx", "huggingface_hub"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
+
         from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer(EMBEDDING_MODEL)
-        print("Embedding model loaded.")
+        if _is_cached(EMBEDDING_MODEL):
+            print(f"Loading embedding model '{EMBEDDING_MODEL}' from local cache...")
+        else:
+            print(f"Downloading embedding model '{EMBEDDING_MODEL}' (~130MB, one-time)...")
+        _model = SentenceTransformer(EMBEDDING_MODEL, cache_folder=str(MODEL_CACHE_DIR))
     return _model
 
 
