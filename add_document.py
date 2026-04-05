@@ -2,21 +2,20 @@
     Starter script to add a new document to PersonalLibrary.
 
     Usage:
-        python add_document.py <url> <file_name>
+        python add_document.py --url <url> --file_name <file_name>
 
     Example:
-        python add_document.py https://example.com/article My_Article.md
+        python add_document.py --url https://example.com/article --file_name My_Article.md
 
-    This script fetches the document, generates its summary, updates the
-    relation table, and incrementally updates the RAG index.
+    This script fetches the document, generates its summary (saved to doc_summary/
+    with the source URL in YAML frontmatter), and incrementally updates the RAG index.
 """
 
 import argparse
 import logging
 
 from utils.fetch_document import fetch_document
-from utils.generate_summary import process_document
-from utils.update_relation_table import update_relation_table
+from utils.generate_summary import generate_summary, save_summary
 from RAG.index import build_index
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -32,13 +31,12 @@ def main():
     args = parser.parse_args()
 
     logger.info("Fetching: %s", args.url)
-    fetch_document(url=args.url, file_name=args.file_name)
+    content = fetch_document(url=args.url)
 
     logger.info("Generating summary for: %s", args.file_name)
-    process_document(file_name=args.file_name)
+    summary = generate_summary(content)
 
-    logger.info("Updating relation table")
-    update_relation_table()
+    save_summary(file_name=args.file_name, summary_text=summary, url=args.url)
 
     logger.info("Updating RAG index")
     build_index(rebuild=False)

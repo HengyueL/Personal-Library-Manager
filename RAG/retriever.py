@@ -71,17 +71,16 @@ def retrieve(
     ranked_docs = sorted(best_per_file.values(), key=lambda x: x["score"], reverse=True)
     ranked_docs = ranked_docs[:top_k_docs]
 
-    # Collect raw chunks for LLM context (exclude summaries to avoid summary-of-summary)
+    # Collect all results for LLM synthesis context
     chunks = []
     for doc_id, text, meta, score in zip(ids, documents, metadatas, scores):
-        if meta.get("content_type") == "raw_chunk":
-            chunks.append({
-                "file_name": meta["source"],
-                "text": text,
-                "score": score,
-                "content_type": meta["content_type"],
-                "chunk_index": meta.get("chunk_index", 0),
-            })
+        chunks.append({
+            "file_name": meta["source"],
+            "text": text,
+            "score": score,
+            "content_type": meta["content_type"],
+            "chunk_index": meta.get("chunk_index", 0),
+        })
 
     # Sort chunks by score descending
     chunks.sort(key=lambda x: x["score"], reverse=True)

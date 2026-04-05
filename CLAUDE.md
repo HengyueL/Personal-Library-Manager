@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**PersonalLibrary** is a document management and RAG (Retrieval-Augmented Generation) system for managing papers and articles of interest. The workflow is: fetch HTML → convert to markdown → generate AI summary → update metadata index → build vector index → query with natural language.
+**PersonalLibrary** is a document management and RAG (Retrieval-Augmented Generation) system for managing papers and articles of interest. The workflow is: fetch HTML/PDF → generate AI summary (saved with source URL) → build vector index → query with natural language.
 
 ## Setup
 
@@ -51,15 +51,6 @@ python retrieve_document.py "your question here" --no-answer
 
 # --- Individual steps ---
 
-# Fetch a document (HTML or PDF) and save to doc_raw/
-python utils/fetch_document.py
-
-# Generate AI summaries for all documents in doc_raw/
-python utils/generate_summary.py
-
-# Rebuild the metadata relation table (doc_relation_table.csv)
-python utils/update_relation_table.py
-
 # Build / incrementally update the RAG vector index
 python RAG/index.py
 
@@ -74,29 +65,27 @@ python RAG/query.py "your question here" --top-k 3
 
 ### Starter Scripts
 
-- **`add_document.py`** — Accepts `--url` and `--file_name` CLI args; auto-detects HTML vs PDF (by URL extension or `Content-Type` HEAD request), fetches and converts, summarizes, updates the relation table, and incrementally updates the RAG index in one shot.
+- **`add_document.py`** — Accepts `--url` and `--file_name` CLI args; auto-detects HTML vs PDF, fetches and converts the document in memory, generates a summary via LLM, saves it to `doc_summary/` with YAML frontmatter containing the source URL, and incrementally updates the RAG index in one shot.
 - **`retrieve_document.py`** — Accepts a positional query string plus `--top-k` and `--no-answer` flags; queries the RAG system and logs ranked sources + synthesized answer.
 
 ## Architecture
 
 ### Directory Structure
-- `doc_raw/` — Raw documents as markdown (with YAML frontmatter containing source URL)
-- `doc_summary/` — AI-generated summaries, parallel to `doc_raw/` (same filenames)
-- `utils/` — Standalone utility scripts (fetch HTML/PDF, summarize, update index table)
+- `doc_summary/` — AI-generated summaries with YAML frontmatter containing the source URL
+- `utils/` — Standalone utility scripts (fetch HTML/PDF, summarize)
 - `RAG/` — RAG system implementation
 - `tests/` — pytest test suite (`tests/RAG/`, `tests/utils/`)
 - `RAG/chroma_db/` — Persistent Chroma vector store (gitignored, auto-created)
 - `RAG/models/` — Project-local embedding model cache (gitignored, downloaded on first use)
-- `doc_relation_table.csv` — CSV metadata index: `index`, `file_name`, `orignal_url` (note: typo in column name is intentional/existing)
 
 ### Full Pipeline
 
 ```
-fetch_document.py → doc_raw/*.md
+fetch_document(url) → markdown string (in memory)
                         ↓
-            generate_summary.py → doc_summary/*.md
+        generate_summary(content) + save_summary(file_name, summary, url)
                         ↓
-        update_relation_table.py → doc_relation_table.csv
+                doc_summary/{file_name}  (with ---\nurl: ...\n--- frontmatter)
                         ↓
                 RAG/index.py → RAG/chroma_db/
                         ↓
@@ -105,15 +94,13 @@ fetch_document.py → doc_raw/*.md
 
 ### Data Flow Details
 
-1. **`utils/fetch_document.py`** — Auto-detects HTML vs PDF: checks URL extension (`.pdf`) then makes a HEAD request to inspect `Content-Type`. HTML is downloaded and converted with `html2text`; PDFs are downloaded to a temp file and converted with `markitdown`. Both paths prepend YAML frontmatter (`url: <source>`) and save to `doc_raw/<file_name>.md`. Refuses to overwrite existing files.
+1. **`utils/fetch_document.py`** — `fetch_document(url) -> str`: auto-detects HTML vs PDF (URL extension then `Content-Type` HEAD request). HTML converted with `html2text`; PDFs downloaded to a temp file and converted with `markitdown`. Returns raw markdown string without frontmatter; does not write to disk.
 
-2. **`utils/generate_summary.py`** — Reads from `doc_raw/`, calls HuggingFace Inference API (OpenAI-compatible client, model `openai/gpt-oss-120b`) to produce structured summaries, saves to `doc_summary/<file_name>.md`. Skips already-summarized documents.
+2. **`utils/generate_summary.py`** — `generate_summary(content: str) -> str`: calls HuggingFace Inference API (OpenAI-compatible client, model `openai/gpt-oss-120b`) to produce a structured summary. `save_summary(file_name, summary_text, url)`: writes to `doc_summary/<file_name>` with YAML frontmatter (`url: <source>`). Skips if file already exists.
 
-3. **`utils/update_relation_table.py`** — Scans `doc_raw/`, validates that corresponding `doc_summary/` files exist, extracts source URLs from YAML frontmatter, writes/updates `doc_relation_table.csv`. Removes stale entries for deleted files.
+3. **`RAG/index.py`** — Reads `doc_summary/*.md`. Extracts the source URL from each file's YAML frontmatter via `strip_frontmatter()`. Embeds the summary as a single vector and upserts into Chroma. Idempotent — skips already-indexed files.
 
-4. **`RAG/index.py`** — Reads `doc_raw/` and `doc_summary/`. Raw docs are stripped of frontmatter, chunked (800 chars, 150-char overlap), embedded via local `all-MiniLM-L6-v2`. Summaries are embedded whole. All vectors upserted into Chroma with cosine distance. Idempotent — skips already-indexed files.
-
-5. **`RAG/query.py`** — Embeds the query, retrieves top-k chunks from Chroma, deduplicates results per source file, then calls the HF LLM to synthesize a cited answer. Returns `{query, sources, answer}`. Importable as `from RAG import query`.
+4. **`RAG/query.py`** — Embeds the query, retrieves top-k summaries from Chroma, deduplicates per source file, then calls the HF LLM to synthesize a cited answer. Returns `{query, sources, answer}`. Importable as `from RAG import query`.
 
 ### RAG Module Layout
 
@@ -121,7 +108,7 @@ fetch_document.py → doc_raw/*.md
 |---|---|
 | `RAG/config.py` | Constants: paths, model IDs, `CHUNK_SIZE=800`, `CHUNK_OVERLAP=150`, `TOP_K_CHUNKS=8`, `TOP_K_DOCS=5` |
 | `RAG/chunking.py` | `strip_frontmatter(text)` + `chunk_text(text, size, overlap)` |
-| `RAG/embedder.py` | Lazy-load `all-MiniLM-L6-v2` singleton + `embed(texts)` |
+| `RAG/embedder.py` | Lazy-load `BAAI/bge-small-en-v1.5` singleton + `embed(texts)` |
 | `RAG/index.py` | `build_index(rebuild=False)` — Chroma upsert pipeline |
 | `RAG/retriever.py` | `retrieve(query_text)` — Chroma search + per-file dedup |
 | `RAG/synthesizer.py` | `synthesize_answer(query, chunks)` — LLM call with citation prompt |
@@ -129,14 +116,13 @@ fetch_document.py → doc_raw/*.md
 
 ### Indexing Scheme
 
-- Raw chunk IDs: `raw::{file_name}::{chunk_idx}`, metadata `content_type="raw_chunk"`
 - Summary IDs: `summary::{file_name}`, metadata `content_type="summary"`
 - Chroma collection uses cosine distance (`hnsw:space=cosine`); score = `1 - distance` (0–1, higher is better)
-- Only raw chunks (not summaries) are sent to the LLM synthesis prompt
+- Summaries are used directly as LLM synthesis context
 
 ### Document Format
 
-Every file in `doc_raw/` begins with:
+Every file in `doc_summary/` begins with:
 ```markdown
 ---
 url: https://example.com/original-source
@@ -145,7 +131,7 @@ url: https://example.com/original-source
 
 ### External Dependencies
 - **HuggingFace Inference API** — Used for summary generation and answer synthesis; requires `HF_TOKEN` env var. Not needed for index building or `--no-answer` queries.
-- `sentence-transformers` — Local `all-MiniLM-L6-v2` for embeddings (~80MB, downloaded on first use)
+- `sentence-transformers` — Local `BAAI/bge-small-en-v1.5` for embeddings (~130MB, downloaded on first use)
 - `chromadb` — Local persistent vector store
 - `requests` — HTTP fetching
 - `html2text` / `markdownify` — HTML-to-markdown conversion

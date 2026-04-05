@@ -116,7 +116,6 @@ class TestFetchPdf:
                     from utils.fetch_document import _fetch_pdf
                     _fetch_pdf("https://example.com/paper.pdf")
 
-        # All temp files should have been deleted
         for p in captured_tmp_paths:
             assert not p.exists(), f"Temp file not cleaned up: {p}"
 
@@ -126,51 +125,31 @@ class TestFetchPdf:
 # ---------------------------------------------------------------------------
 
 class TestFetchDocument:
-    def test_skips_existing_file(self, tmp_path, monkeypatch, caplog):
-        import logging
-        monkeypatch.setattr("utils.fetch_document.DESTINATION_PATH", tmp_path)
-        existing = tmp_path / "doc.md"
-        existing.write_text("existing content")
-
-        with patch("utils.fetch_document._is_pdf", return_value=False):
-            with patch("utils.fetch_document._fetch_html", return_value="new content") as mock_fetch:
-                import utils.fetch_document as fd
-                with caplog.at_level(logging.ERROR, logger="utils.fetch_document"):
-                    fd.fetch_document("https://example.com", "doc.md")
-                mock_fetch.assert_not_called()
-
-    def test_pdf_url_calls_fetch_pdf(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("utils.fetch_document.DESTINATION_PATH", tmp_path)
-
+    def test_pdf_url_calls_fetch_pdf_and_returns_content(self):
         with patch("utils.fetch_document._is_pdf", return_value=True):
             with patch("utils.fetch_document._fetch_pdf", return_value="pdf markdown") as mock_pdf:
                 with patch("utils.fetch_document._fetch_html") as mock_html:
                     from utils.fetch_document import fetch_document
-                    fetch_document("https://example.com/paper.pdf", "paper.md")
+                    result = fetch_document("https://example.com/paper.pdf")
 
         mock_pdf.assert_called_once_with("https://example.com/paper.pdf")
         mock_html.assert_not_called()
+        assert result == "pdf markdown"
 
-    def test_html_url_calls_fetch_html(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("utils.fetch_document.DESTINATION_PATH", tmp_path)
-
+    def test_html_url_calls_fetch_html_and_returns_content(self):
         with patch("utils.fetch_document._is_pdf", return_value=False):
             with patch("utils.fetch_document._fetch_html", return_value="html markdown") as mock_html:
                 with patch("utils.fetch_document._fetch_pdf") as mock_pdf:
                     from utils.fetch_document import fetch_document
-                    fetch_document("https://example.com/article", "article.md")
+                    result = fetch_document("https://example.com/article")
 
         mock_html.assert_called_once_with("https://example.com/article")
         mock_pdf.assert_not_called()
+        assert result == "html markdown"
 
-    def test_saved_file_has_yaml_frontmatter(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("utils.fetch_document.DESTINATION_PATH", tmp_path)
-
+    def test_returns_string(self):
         with patch("utils.fetch_document._is_pdf", return_value=False):
-            with patch("utils.fetch_document._fetch_html", return_value="body content"):
+            with patch("utils.fetch_document._fetch_html", return_value="some content"):
                 from utils.fetch_document import fetch_document
-                fetch_document("https://example.com/article", "article.md")
-
-        content = (tmp_path / "article.md").read_text(encoding="utf-8")
-        assert content.startswith("---\nurl: https://example.com/article\n---")
-        assert "body content" in content
+                result = fetch_document("https://example.com/article")
+        assert isinstance(result, str)

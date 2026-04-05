@@ -9,8 +9,6 @@ from markitdown import MarkItDown
 
 logger = logging.getLogger(__name__)
 
-DESTINATION_PATH = Path(__file__).parent.parent / "doc_raw"
-
 
 def _is_pdf(url: str) -> bool:
     if urlparse(url).path.lower().endswith(".pdf"):
@@ -22,25 +20,19 @@ def _is_pdf(url: str) -> bool:
         return False
 
 
-def fetch_document(url: str, file_name: str):
-    save_path = DESTINATION_PATH / file_name
+def fetch_document(url: str) -> str:
+    """
+    Fetch a document from a URL and return its content as a markdown string.
 
-    if save_path.exists():
-        logger.error("File already exists: %s", save_path)
-        return
-
+    Returns:
+        Markdown content string (without YAML frontmatter).
+    """
     if _is_pdf(url):
         logger.info("Detected PDF; converting with MarkItDown")
-        markdown = _fetch_pdf(url)
+        return _fetch_pdf(url)
     else:
         logger.info("Detected HTML; converting with html2text")
-        markdown = _fetch_html(url)
-
-    yaml_frontmatter = f"---\nurl: {url}\n---\n\n"
-    with open(save_path, "w", encoding="utf-8") as f:
-        f.write(yaml_frontmatter + markdown)
-
-    logger.info("Document saved to: %s", save_path)
+        return _fetch_html(url)
 
 
 def _fetch_html(url: str) -> str:

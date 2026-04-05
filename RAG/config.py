@@ -2,9 +2,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
-DOC_RAW_PATH = PROJECT_ROOT / "doc_raw"
 DOC_SUMMARY_PATH = PROJECT_ROOT / "doc_summary"
-RELATION_TABLE_PATH = PROJECT_ROOT / "doc_relation_table.csv"
 CHROMA_DB_PATH = PROJECT_ROOT / "RAG" / "chroma_db"
 MODEL_CACHE_DIR = PROJECT_ROOT / "RAG" / "models"
 

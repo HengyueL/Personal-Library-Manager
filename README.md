@@ -3,14 +3,11 @@ A private project to effectively manage the papers/projects that I am interested
 
 ## Design
 
-1. `doc_raw/` stores all raw documents fetched by `utils/fetch_document.py` as markdown with a YAML frontmatter `url:` header. Both HTML pages and PDF files are supported.
-2. `doc_summary/` stores LLM-generated abstracts for each corresponding document in `doc_raw/`, produced by `utils/generate_summary.py`.
-3. `doc_relation_table.csv` is a metadata index maintained by `utils/update_relation_table.py`.
-4. `RAG/` implements a RAG system for querying across all stored documents — returns a ranked list of relevant sources and a synthesized, cited answer.
-5. `tests/` contains the pytest suite covering all `utils/` and `RAG/` modules.
+1. `doc_summary/` stores LLM-generated summaries for each document, with a YAML frontmatter `url:` header recording the original source. Both HTML pages and PDF files are supported.
+2. `RAG/` implements a RAG system for querying across all stored summaries — returns a ranked list of relevant sources and a synthesized, cited answer.
+3. `tests/` contains the pytest suite covering all `utils/` and `RAG/` modules.
 
-## Setup
-
+## Setup (Pre-requisites)
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -33,7 +30,7 @@ python add_document.py --url https://example.com/paper.pdf --file_name My_Paper.
 python add_document.py --url https://arxiv.org/pdf/2303.08774 --file_name Attention_Paper.md
 ```
 
-Fetches and converts the document, generates a summary, updates the relation table, and incrementally updates the RAG index in one shot.
+Fetches and converts the document in memory, generates a summary, saves it to `doc_summary/` with the source URL in frontmatter, and incrementally updates the RAG index in one shot.
 
 ## Running Tests
 
