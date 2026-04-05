@@ -2,3 +2,5 @@ requests
 html2text
 markdownify
 openai
+chromadb
+sentence-transformers
