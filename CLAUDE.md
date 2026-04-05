@@ -82,7 +82,7 @@ Located in `quick_start/` — run from the repo root (they add the root to `sys.
 - **`quick_start/retrieve_document.py`** — Accepts `--query` plus `--top-k` and `--retrieval-only` flags; queries the RAG system and logs ranked sources + synthesized answer.
 - **`quick_start/rebuild_knowledge_base.py`** — Rebuilds the RAG index from scratch.
 - **`quick_start/cli.py`** — Unified `plib` CLI dispatcher (registered as an entry point via `pyproject.toml`).
-- **`quick_start/gui.py`** — Gradio web UI with three tabs: Add Document, Query Library, Rebuild Index.
+- **`quick_start/gui.py`** — Gradio web UI with four tabs: Add Document, View Document, Query Library, Rebuild Index. The Add Document and Rebuild Index tabs stream log output in real-time via a background-thread + queue mechanism (`_ThreadLocalWriter` + `_run_with_streaming`). The View Document tab lists all files in `doc_summary/`, renders the selected document as formatted markdown, and displays its source URL.
 
 ## Architecture
 

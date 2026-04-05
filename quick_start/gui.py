@@ -137,6 +137,35 @@ def add_document_handler(url: str, name: str, cookies_path: str):
         yield last + f"\nERROR: {e}"
 
 
+def _doc_summary_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "doc_summary"
+
+
+def list_documents() -> list[str]:
+    return sorted(p.name for p in _doc_summary_dir().glob("*.md"))
+
+
+def view_document_handler(file_name: str) -> tuple[str, str]:
+    """Return (source_url, rendered_markdown) for the selected document."""
+    if not file_name:
+        return "", ""
+    path = _doc_summary_dir() / file_name
+    if not path.exists():
+        return "", f"_File not found: {file_name}_"
+    raw = path.read_text(encoding="utf-8")
+    # Strip YAML frontmatter and extract url
+    url = ""
+    if raw.startswith("---"):
+        end = raw.find("---", 3)
+        if end != -1:
+            frontmatter = raw[3:end].strip()
+            for line in frontmatter.splitlines():
+                if line.startswith("url:"):
+                    url = line[4:].strip()
+            raw = raw[end + 3:].strip()
+    return url, raw
+
+
 def query_handler(user_query: str, top_k: int, retrieval_only: bool):
     user_query = user_query.strip()
     if not user_query:
@@ -200,6 +229,26 @@ def build_app() -> gr.Blocks:
                 fn=add_document_handler,
                 inputs=[url_input, name_input, cookies_input],
                 outputs=add_output,
+            )
+
+        with gr.Tab("View Document"):
+            doc_dropdown = gr.Dropdown(
+                label="Select document",
+                choices=list_documents(),
+                interactive=True,
+            )
+            refresh_btn = gr.Button("Refresh list")
+            source_url = gr.Textbox(label="Source URL", interactive=False)
+            doc_md = gr.Markdown()
+            refresh_btn.click(
+                fn=lambda: gr.update(choices=list_documents()),
+                inputs=[],
+                outputs=doc_dropdown,
+            )
+            doc_dropdown.change(
+                fn=view_document_handler,
+                inputs=doc_dropdown,
+                outputs=[source_url, doc_md],
             )
 
         with gr.Tab("Query Library"):

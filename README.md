@@ -7,58 +7,53 @@ A private project to effectively manage the papers/projects that I am interested
 2. `RAG/` implements a RAG system for querying across all stored summaries — returns a ranked list of relevant sources and a synthesized, cited answer.
 3. `tests/` contains the pytest suite covering all `utils/` and `RAG/` modules.
 
-## Setup (Pre-requisites)
+## Setup
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .              # installs all deps and registers the `plib` CLI
 export HF_TOKEN=<your_huggingface_token>
 ```
 
-## Adding a Document
-
-HTML pages and PDFs are both supported — the type is detected automatically from the URL extension or HTTP `Content-Type` header.
+## Web GUI
 
 ```bash
-# Add an HTML article (explicit filename)
-python quick_start/add_document.py --url https://example.com/article --file_name My_Article.md
-
-# Add a PDF (by extension)
-python quick_start/add_document.py --url https://example.com/paper.pdf --file_name My_Paper.md
-
-# Auto-generate filename from domain + document title (Source-Title.md format)
-python quick_start/add_document.py --url https://arxiv.org/pdf/2303.08774
+plib gui
+plib gui --port 8080 --share
 ```
 
-Fetches and converts the document in memory, generates a summary, saves it to `doc_summary/` with the source URL in frontmatter, and incrementally updates the RAG index in one shot.
+The GUI has four tabs:
+
+| Tab | What it does |
+|-----|--------------|
+| **Add Document** | Fetch a URL (HTML or PDF), generate a summary, and add it to the library. Progress streams in real-time. |
+| **View Document** | Browse and render any document in `doc_summary/` as formatted markdown; shows the original source URL. |
+| **Query Library** | Ask a natural-language question; returns ranked sources and a synthesized answer. |
+| **Rebuild Index** | Re-embed all documents into the vector index (full rebuild or incremental). Output streams in real-time. |
+
+## CLI
+
+```bash
+# Add a document
+plib add --url https://example.com/article --name My_Article.md
+plib add --url https://arxiv.org/pdf/2303.08774        # auto-generates filename
+
+# Query
+plib query --query "your question here"
+plib query --query "your question here" --top-k 3
+plib query --query "your question here" --retrieval-only
+
+# Rebuild index
+plib rebuild
+plib rebuild --incremental
+```
 
 ## Running Tests
 
 ```bash
-# Preferred: via uv
 uv run python -m pytest tests/ -q
-
-# Alternative: direct venv binary
-.venv/bin/python -m pytest tests/ -q
 ```
-
-## Querying
-
-```bash
-python quick_start/retrieve_document.py --query "your question here"
-python quick_start/retrieve_document.py --query "your question here" --top-k 3
-python quick_start/retrieve_document.py --query "your question here" --no-answer   # retrieval only, no LLM call
-```
-
-Or use the lower-level CLI directly:
-
-```bash
-python RAG/query.py "what is harness design?"
-python RAG/query.py "..." --no-answer
-python RAG/query.py "..." --top-k 3
-```
-
-The first query call auto-builds the RAG index if it doesn't exist yet.
 
 ## Python API
 
