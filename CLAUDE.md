@@ -41,13 +41,14 @@ A **PostToolUse hook** (`.claude/settings.json`) runs `pytest` automatically aft
 
 ```bash
 # Add a new document (HTML or PDF — detected automatically)
-python add_document.py --url https://example.com/article --file_name My_Article.md
-python add_document.py --url https://arxiv.org/pdf/2303.08774 --file_name Paper.md
+python quick_start/add_document.py --url https://example.com/article --file_name My_Article.md
+python quick_start/add_document.py --url https://arxiv.org/pdf/2303.08774 --file_name Paper.md
+python quick_start/add_document.py --url https://example.com/article   # auto-generates filename
 
 # Query the RAG system
-python retrieve_document.py "your question here"
-python retrieve_document.py "your question here" --top-k 3
-python retrieve_document.py "your question here" --no-answer
+python quick_start/retrieve_document.py --query "your question here"
+python quick_start/retrieve_document.py --query "your question here" --top-k 3
+python quick_start/retrieve_document.py --query "your question here" --no-answer
 
 # --- Individual steps ---
 
@@ -65,13 +66,17 @@ python RAG/query.py "your question here" --top-k 3
 
 ### Starter Scripts
 
-- **`add_document.py`** — Accepts `--url` and `--file_name` CLI args; auto-detects HTML vs PDF, fetches and converts the document in memory, generates a summary via LLM, saves it to `doc_summary/` with YAML frontmatter containing the source URL, and incrementally updates the RAG index in one shot.
-- **`retrieve_document.py`** — Accepts a positional query string plus `--top-k` and `--no-answer` flags; queries the RAG system and logs ranked sources + synthesized answer.
+Located in `quick_start/` — run from the repo root (they add the root to `sys.path` automatically):
+
+- **`quick_start/add_document.py`** — Accepts `--url` and optional `--file_name` CLI args; auto-detects HTML vs PDF, fetches and converts the document in memory, generates a summary via LLM, saves it to `doc_summary/` with YAML frontmatter containing the source URL, and incrementally updates the RAG index in one shot. If `--file_name` is omitted, a name is auto-generated from the URL domain and document title in `Source-Title.md` format.
+- **`quick_start/retrieve_document.py`** — Accepts `--query` plus `--top-k` and `--no-answer` flags; queries the RAG system and logs ranked sources + synthesized answer.
+- **`quick_start/rebuild_knowledgbase.py`** — Rebuilds the RAG index from scratch.
 
 ## Architecture
 
 ### Directory Structure
 - `doc_summary/` — AI-generated summaries with YAML frontmatter containing the source URL
+- `quick_start/` — End-user CLI scripts (`add_document.py`, `retrieve_document.py`, `rebuild_knowledgbase.py`)
 - `utils/` — Standalone utility scripts (fetch HTML/PDF, summarize)
 - `RAG/` — RAG system implementation
 - `tests/` — pytest test suite (`tests/RAG/`, `tests/utils/`)

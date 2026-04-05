@@ -20,14 +20,14 @@ export HF_TOKEN=<your_huggingface_token>
 HTML pages and PDFs are both supported — the type is detected automatically from the URL extension or HTTP `Content-Type` header.
 
 ```bash
-# Add an HTML article
-python add_document.py --url https://example.com/article --file_name My_Article.md
+# Add an HTML article (explicit filename)
+python quick_start/add_document.py --url https://example.com/article --file_name My_Article.md
 
 # Add a PDF (by extension)
-python add_document.py --url https://example.com/paper.pdf --file_name My_Paper.md
+python quick_start/add_document.py --url https://example.com/paper.pdf --file_name My_Paper.md
 
-# Add a PDF (no .pdf extension — detected via Content-Type)
-python add_document.py --url https://arxiv.org/pdf/2303.08774 --file_name Attention_Paper.md
+# Auto-generate filename from domain + document title (Source-Title.md format)
+python quick_start/add_document.py --url https://arxiv.org/pdf/2303.08774
 ```
 
 Fetches and converts the document in memory, generates a summary, saves it to `doc_summary/` with the source URL in frontmatter, and incrementally updates the RAG index in one shot.
@@ -45,9 +45,9 @@ uv run python -m pytest tests/ -q
 ## Querying
 
 ```bash
-python retrieve_document.py "your question here"
-python retrieve_document.py "your question here" --top-k 3
-python retrieve_document.py "your question here" --no-answer   # retrieval only, no LLM call
+python quick_start/retrieve_document.py --query "your question here"
+python quick_start/retrieve_document.py --query "your question here" --top-k 3
+python quick_start/retrieve_document.py --query "your question here" --no-answer   # retrieval only, no LLM call
 ```
 
 Or use the lower-level CLI directly:
