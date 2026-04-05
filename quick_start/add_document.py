@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from utils.fetch_document import fetch_document
+from utils.fetch_document import AuthRequiredError, fetch_document
 from utils.generate_summary import generate_summary, save_summary
 from utils.file_naming import derive_file_name
 from RAG.index import build_index
@@ -39,10 +39,20 @@ def main():
         metavar="FILENAME",
         help="Output filename (e.g. My_Article.md). Auto-generated from title if omitted.",
     )
+    parser.add_argument(
+        "--cookies",
+        default=None,
+        metavar="FILE",
+        help="Path to a Netscape cookies.txt file for login-gated URLs.",
+    )
     args = parser.parse_args()
 
     logger.info("Fetching: %s", args.url)
-    content = fetch_document(url=args.url)
+    try:
+        content = fetch_document(url=args.url, cookies_path=args.cookies)
+    except AuthRequiredError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
 
     if args.name:
         file_name = args.name
