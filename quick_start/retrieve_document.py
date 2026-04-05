@@ -2,8 +2,8 @@
     Starter script for querying PersonalLibrary with RAG.
 
     Usage:
-        python retrieve_document.py "your question here"
-        python retrieve_document.py "your question here" --top-k 3 --no-answer
+        python retrieve_document.py --query "your question here"
+        python retrieve_document.py --query "your question here" --top-k 3 --retrieval-only
 """
 
 import argparse
@@ -27,13 +27,13 @@ def main():
     parser = argparse.ArgumentParser(description="Query the PersonalLibrary RAG system.")
     parser.add_argument("--query", type=str, required=True, help="Natural language query")
     parser.add_argument("--top-k", type=int, default=5, help="Number of source documents to retrieve (default: 5)")
-    parser.add_argument("--no-answer", action="store_true", help="Skip LLM answer synthesis, retrieval only")
+    parser.add_argument("--retrieval-only", action="store_true", help="Return ranked sources only; skip LLM answer synthesis")
     args = parser.parse_args()
 
     logger.info("Query: %s", args.query)
-    result = query(args.query, top_k_docs=args.top_k, synthesize=not args.no_answer)
+    result = query(args.query, top_k_docs=args.top_k, synthesize=not args.retrieval_only)
     if result["answer"]:
-        print(f"\n{YELLOW}=== References ==={RESET}")
+        print(f"\n{YELLOW}=== Answer ==={RESET}")
         print(f"\n{YELLOW}{result['answer']}{RESET}")
 
     print(f"\n{GREEN}=== References ==={RESET}")

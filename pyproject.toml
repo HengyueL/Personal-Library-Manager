@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "personal-library"
+version = "0.1.0"
+description = "Personal document management and RAG system"
+requires-python = ">=3.10"
+dependencies = [
+    "requests",
+    "html2text",
+    "markdownify",
+    "markitdown[pdf]",
+    "openai",
+    "chromadb",
+    "sentence-transformers",
+    "gradio>=4.0",
+]
+
+[project.scripts]
+plib = "quick_start.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quick_start*", "RAG*", "utils*"]

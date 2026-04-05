@@ -13,8 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 python -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install the package and all dependencies (also registers the `plib` CLI)
+pip install -e .
 
 # Required environment variable for summary generation
 export HF_TOKEN=<your_huggingface_token>
@@ -39,18 +39,28 @@ A **PostToolUse hook** (`.claude/settings.json`) runs `pytest` automatically aft
 
 ## Common Commands
 
+After `pip install -e .`, use the `plib` CLI:
+
 ```bash
 # Add a new document (HTML or PDF — detected automatically)
-python quick_start/add_document.py --url https://example.com/article --file_name My_Article.md
-python quick_start/add_document.py --url https://arxiv.org/pdf/2303.08774 --file_name Paper.md
-python quick_start/add_document.py --url https://example.com/article   # auto-generates filename
+plib add --url https://example.com/article --name My_Article.md
+plib add --url https://arxiv.org/pdf/2303.08774 --name Paper.md
+plib add --url https://example.com/article          # auto-generates filename
 
 # Query the RAG system
-python quick_start/retrieve_document.py --query "your question here"
-python quick_start/retrieve_document.py --query "your question here" --top-k 3
-python quick_start/retrieve_document.py --query "your question here" --no-answer
+plib query --query "your question here"
+plib query --query "your question here" --top-k 3
+plib query --query "your question here" --retrieval-only
 
-# --- Individual steps ---
+# Rebuild the RAG index from scratch (incremental = skip already-indexed docs)
+plib rebuild
+plib rebuild --incremental
+
+# Launch the web GUI
+plib gui
+plib gui --port 8080 --share
+
+# --- Individual steps (direct Python, no install needed) ---
 
 # Build / incrementally update the RAG vector index
 python RAG/index.py
@@ -58,7 +68,7 @@ python RAG/index.py
 # Rebuild the index from scratch
 python RAG/index.py --rebuild
 
-# Query via CLI (auto-builds index on first run; requires HF_TOKEN for answer synthesis)
+# Query via CLI (requires HF_TOKEN for answer synthesis)
 python RAG/query.py "your question here"
 python RAG/query.py "your question here" --no-answer   # retrieval only, no LLM call
 python RAG/query.py "your question here" --top-k 3
@@ -68,15 +78,17 @@ python RAG/query.py "your question here" --top-k 3
 
 Located in `quick_start/` — run from the repo root (they add the root to `sys.path` automatically):
 
-- **`quick_start/add_document.py`** — Accepts `--url` and optional `--file_name` CLI args; auto-detects HTML vs PDF, fetches and converts the document in memory, generates a summary via LLM, saves it to `doc_summary/` with YAML frontmatter containing the source URL, and incrementally updates the RAG index in one shot. If `--file_name` is omitted, a name is auto-generated from the URL domain and document title in `Source-Title.md` format.
-- **`quick_start/retrieve_document.py`** — Accepts `--query` plus `--top-k` and `--no-answer` flags; queries the RAG system and logs ranked sources + synthesized answer.
-- **`quick_start/rebuild_knowledgbase.py`** — Rebuilds the RAG index from scratch.
+- **`quick_start/add_document.py`** — Accepts `--url` and optional `--name` CLI args; auto-detects HTML vs PDF, fetches and converts the document in memory, generates a summary via LLM, saves it to `doc_summary/` with YAML frontmatter containing the source URL, and incrementally updates the RAG index in one shot. If `--name` is omitted, a name is auto-generated from the URL domain and document title in `Source-Title.md` format.
+- **`quick_start/retrieve_document.py`** — Accepts `--query` plus `--top-k` and `--retrieval-only` flags; queries the RAG system and logs ranked sources + synthesized answer.
+- **`quick_start/rebuild_knowledge_base.py`** — Rebuilds the RAG index from scratch.
+- **`quick_start/cli.py`** — Unified `plib` CLI dispatcher (registered as an entry point via `pyproject.toml`).
+- **`quick_start/gui.py`** — Gradio web UI with three tabs: Add Document, Query Library, Rebuild Index.
 
 ## Architecture
 
 ### Directory Structure
 - `doc_summary/` — AI-generated summaries with YAML frontmatter containing the source URL
-- `quick_start/` — End-user CLI scripts (`add_document.py`, `retrieve_document.py`, `rebuild_knowledgbase.py`)
+- `quick_start/` — End-user scripts: `add_document.py`, `retrieve_document.py`, `rebuild_knowledge_base.py`, `cli.py` (plib entry point), `gui.py` (Gradio UI)
 - `utils/` — Standalone utility scripts (fetch HTML/PDF, summarize)
 - `RAG/` — RAG system implementation
 - `tests/` — pytest test suite (`tests/RAG/`, `tests/utils/`)
@@ -135,7 +147,7 @@ url: https://example.com/original-source
 ```
 
 ### External Dependencies
-- **HuggingFace Inference API** — Used for summary generation and answer synthesis; requires `HF_TOKEN` env var. Not needed for index building or `--no-answer` queries.
+- **HuggingFace Inference API** — Used for summary generation and answer synthesis; requires `HF_TOKEN` env var. Not needed for index building or `--retrieval-only` queries.
 - `sentence-transformers` — Local `BAAI/bge-small-en-v1.5` for embeddings (~130MB, downloaded on first use)
 - `chromadb` — Local persistent vector store
 - `requests` — HTTP fetching
