@@ -22,6 +22,14 @@ export HF_TOKEN=<your_huggingface_token>
 ## Common Commands
 
 ```bash
+# Add a new document (edit URL and FILE_NAME inside the script first)
+python add_document.py
+
+# Query the RAG system
+python retrieve_document.py
+
+# --- Individual steps ---
+
 # Fetch a document from a URL and save to doc_raw/
 python utils/fetch_html.py
 
@@ -37,11 +45,16 @@ python RAG/index.py
 # Rebuild the index from scratch
 python RAG/index.py --rebuild
 
-# Query (auto-builds index on first run; requires HF_TOKEN for answer synthesis)
+# Query via CLI (auto-builds index on first run; requires HF_TOKEN for answer synthesis)
 python RAG/query.py "your question here"
 python RAG/query.py "your question here" --no-answer   # retrieval only, no LLM call
 python RAG/query.py "your question here" --top-k 3
 ```
+
+### Starter Scripts
+
+- **`add_document.py`** — Edit `URL` and `FILE_NAME` at the top, then run to fetch, summarize, update the relation table, and incrementally update the RAG index in one shot.
+- **`retrieve_document.py`** — Edit the `user_query` variable at the top, then run to query the RAG system and print ranked sources + synthesized answer.
 
 ## Architecture
 

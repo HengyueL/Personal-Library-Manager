@@ -17,28 +17,33 @@ pip install -r requirements.txt
 export HF_TOKEN=<your_huggingface_token>
 ```
 
-## Workflow
+## Adding a Document
+
+Edit the `URL` and `FILE_NAME` variables in `add_document.py`, then run:
 
 ```bash
-# 1. Fetch a document
-python utils/fetch_html.py
+python add_document.py
+```
 
-# 2. Generate its summary
-python utils/generate_summary.py
+This fetches the page, generates a summary, updates the relation table, and incrementally updates the RAG index in one shot.
 
-# 3. Update the relation table
-python utils/update_relation_table.py
+## Querying
 
-# 4. Build (or update) the RAG index
-python RAG/index.py
+Edit the `user_query` variable in `retrieve_document.py`, then run:
 
-# 5. Query
+```bash
+python retrieve_document.py
+```
+
+Or use the CLI directly:
+
+```bash
 python RAG/query.py "what is harness design?"
-python RAG/query.py "..." --no-answer   # retrieval only
+python RAG/query.py "..." --no-answer   # retrieval only, no LLM call
 python RAG/query.py "..." --top-k 3
 ```
 
-The first `RAG/query.py` call auto-builds the index if it doesn't exist yet.
+The first query call auto-builds the RAG index if it doesn't exist yet.
 
 ## Python API
 
