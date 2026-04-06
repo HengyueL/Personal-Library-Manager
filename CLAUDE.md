@@ -45,7 +45,7 @@ After `pip install -e .`, use the `plib` CLI:
 # Add a new document (HTML or PDF — detected automatically)
 plib add --url https://example.com/article --name My_Article.md
 plib add --url https://arxiv.org/pdf/2303.08774 --name Paper.md
-plib add --url https://example.com/article          # auto-generates filename
+plib add --url https://example.com/article          # LLM proposes filename from content
 
 # Query the RAG system
 plib query --query "your question here"
@@ -78,7 +78,7 @@ python RAG/query.py "your question here" --top-k 3
 
 Located in `quick_start/` — run from the repo root (they add the root to `sys.path` automatically):
 
-- **`quick_start/add_document.py`** — Accepts `--url` and optional `--name` CLI args; auto-detects HTML vs PDF, fetches and converts the document in memory, generates a summary via LLM, saves it to `doc_summary/` with YAML frontmatter containing the source URL, and incrementally updates the RAG index in one shot. If `--name` is omitted, a name is auto-generated from the URL domain and document title in `Source-Title.md` format.
+- **`quick_start/add_document.py`** — Accepts `--url` and optional `--name` CLI args; auto-detects HTML vs PDF, fetches and converts the document in memory, generates a summary via LLM, saves it to `doc_summary/` with YAML frontmatter containing the source URL, and incrementally updates the RAG index in one shot. If `--name` is omitted, `generate_summary_with_filename` is called instead — a single LLM call that returns both the summary and a proposed `Source-Title.md` filename.
 - **`quick_start/retrieve_document.py`** — Accepts `--query` plus `--top-k` and `--retrieval-only` flags; queries the RAG system and logs ranked sources + synthesized answer.
 - **`quick_start/rebuild_knowledge_base.py`** — Rebuilds the RAG index from scratch.
 - **`quick_start/cli.py`** — Unified `plib` CLI dispatcher (registered as an entry point via `pyproject.toml`).
@@ -100,7 +100,10 @@ Located in `quick_start/` — run from the repo root (they add the root to `sys.
 ```
 fetch_document(url) → markdown string (in memory)
                         ↓
-        generate_summary(content) + save_summary(file_name, summary, url)
+        with --name:  generate_summary(content)            → summary
+        without --name: generate_summary_with_filename(content, url) → summary + file_name
+                        ↓
+        save_summary(file_name, summary, url)
                         ↓
                 doc_summary/{file_name}  (with ---\nurl: ...\n--- frontmatter)
                         ↓
@@ -113,7 +116,10 @@ fetch_document(url) → markdown string (in memory)
 
 1. **`utils/fetch_document.py`** — `fetch_document(url) -> str`: auto-detects HTML vs PDF (URL extension then `Content-Type` HEAD request). HTML converted with `html2text`; PDFs downloaded to a temp file and converted with `markitdown`. Returns raw markdown string without frontmatter; does not write to disk.
 
-2. **`utils/generate_summary.py`** — `generate_summary(content: str) -> str`: calls HuggingFace Inference API (OpenAI-compatible client, model `openai/gpt-oss-120b`) to produce a structured summary. `save_summary(file_name, summary_text, url)`: writes to `doc_summary/<file_name>` with YAML frontmatter (`url: <source>`). Skips if file already exists.
+2. **`utils/generate_summary.py`** — Two generation functions sharing the same HF client:
+   - `generate_summary(content: str) -> str`: single-purpose summary call; used when the filename is already known.
+   - `generate_summary_with_filename(content: str, url: str) -> tuple[str, str]`: single LLM call that returns `(summary, filename)` via a structured prompt; used when `--name` is omitted. Falls back to `Source-Document.md` if the LLM omits the filename line.
+   - `save_summary(file_name, summary_text, url)`: writes to `doc_summary/<file_name>` with YAML frontmatter (`url: <source>`). Skips if file already exists.
 
 3. **`RAG/index.py`** — Reads `doc_summary/*.md`. Extracts the source URL from each file's YAML frontmatter via `strip_frontmatter()`. Embeds the summary as a single vector and upserts into Chroma. Idempotent — skips already-indexed files.
 

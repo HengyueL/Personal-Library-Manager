@@ -40,7 +40,7 @@ def add_document_handler(url: str, name: str, cookies_path: str):
         return
 
     try:
-        from utils.generate_summary import generate_summary, save_summary
+        from utils.generate_summary import generate_summary, generate_summary_with_filename, save_summary
     except KeyError:
         yield (
             "ERROR: HF_TOKEN environment variable is not set.\n"
@@ -62,11 +62,14 @@ def add_document_handler(url: str, name: str, cookies_path: str):
         except AuthRequiredError as e:
             print(str(e))
             return
-        file_name = name if name else derive_file_name(url, content)
-        if not name:
-            print(f"Auto-generated filename: {file_name}")
-        print(f"Generating summary for: {file_name}")
-        summary = generate_summary(content)
+        if name:
+            file_name = name
+            print(f"Generating summary for: {file_name}")
+            summary = generate_summary(content)
+        else:
+            print("Generating summary and filename via LLM...")
+            summary, file_name = generate_summary_with_filename(content, url)
+            print(f"LLM-proposed filename: {file_name}")
         save_summary(file_name=file_name, summary_text=summary, url=url)
         print("Updating RAG index...")
         build_index(rebuild=False)

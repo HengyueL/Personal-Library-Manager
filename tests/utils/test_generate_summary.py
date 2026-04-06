@@ -46,6 +46,50 @@ class TestGenerateSummary:
         assert call_kwargs["max_tokens"] == 1000
 
 
+class TestGenerateSummaryWithFilename:
+    def test_returns_summary_and_filename(self):
+        response = "FILENAME: Anthropic-Agents.md\n\nSUMMARY:\nThis paper covers agents."
+        mock_client = _make_mock_client(response)
+
+        with patch("utils.generate_summary._client", mock_client):
+            from utils.generate_summary import generate_summary_with_filename
+            summary, filename = generate_summary_with_filename("content", "https://anthropic.com/agents")
+
+        assert filename == "Anthropic-Agents.md"
+        assert "This paper covers agents." in summary
+
+    def test_filename_without_md_extension_gets_extension_added(self):
+        response = "FILENAME: Anthropic-Agents\n\nSUMMARY:\nSummary text."
+        mock_client = _make_mock_client(response)
+
+        with patch("utils.generate_summary._client", mock_client):
+            from utils.generate_summary import generate_summary_with_filename
+            _, filename = generate_summary_with_filename("content", "https://anthropic.com/agents")
+
+        assert filename.endswith(".md")
+
+    def test_fallback_filename_when_llm_omits_it(self):
+        response = "Here is a summary without a filename line."
+        mock_client = _make_mock_client(response)
+
+        with patch("utils.generate_summary._client", mock_client):
+            from utils.generate_summary import generate_summary_with_filename
+            summary, filename = generate_summary_with_filename("content", "https://example.com/doc")
+
+        assert filename.endswith(".md")
+        assert summary == response
+
+    def test_url_included_in_prompt(self):
+        mock_client = _make_mock_client("FILENAME: X.md\n\nSUMMARY:\nText.")
+
+        with patch("utils.generate_summary._client", mock_client):
+            from utils.generate_summary import generate_summary_with_filename
+            generate_summary_with_filename("content", "https://openai.com/research")
+
+        prompt = mock_client.chat.completions.create.call_args[1]["messages"][0]["content"]
+        assert "https://openai.com/research" in prompt
+
+
 class TestSaveSummary:
     def test_saves_file_with_url_frontmatter(self, tmp_path, monkeypatch):
         monkeypatch.setattr("utils.generate_summary.DOC_SUMMARY_PATH", tmp_path)

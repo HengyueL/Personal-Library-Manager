@@ -39,7 +39,7 @@ The GUI has four tabs:
 ```bash
 # Add a document
 plib add --url https://example.com/article --name My_Article.md
-plib add --url https://arxiv.org/pdf/2303.08774        # auto-generates filename
+plib add --url https://arxiv.org/pdf/2303.08774        # LLM proposes filename from content
 
 # Query
 plib query --query "your question here"

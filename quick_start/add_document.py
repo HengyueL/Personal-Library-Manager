@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from utils.fetch_document import AuthRequiredError, fetch_document
-from utils.generate_summary import generate_summary, save_summary
+from utils.generate_summary import generate_summary, generate_summary_with_filename, save_summary
 from utils.file_naming import derive_file_name
 from RAG.index import build_index
 
@@ -56,12 +56,12 @@ def main():
 
     if args.name:
         file_name = args.name
+        logger.info("Generating summary for: %s", file_name)
+        summary = generate_summary(content)
     else:
-        file_name = derive_file_name(args.url, content)
-        logger.info("Auto-generated filename: %s", file_name)
-
-    logger.info("Generating summary for: %s", file_name)
-    summary = generate_summary(content)
+        logger.info("Generating summary and filename via LLM...")
+        summary, file_name = generate_summary_with_filename(content, args.url)
+        logger.info("LLM-proposed filename: %s", file_name)
 
     save_summary(file_name=file_name, summary_text=summary, url=args.url)
 
