@@ -1,196 +1,28 @@
 """Gradio web UI for PersonalLibrary."""
 
-import logging
-import queue
 import sys
-import threading
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE.parent))  # repo root  → utils/, RAG/
+sys.path.insert(0, str(_HERE))         # quick_start/ → gui_utils/
 
 import gradio as gr
 
+from gui_utils.documents import _doc_summary_dir, list_documents
+from gui_utils.streaming import _run_with_streaming
+
 CUSTOM_CSS = """
-/* ── Font size ─────────────────────────────────────────── */
 .gradio-container, .gradio-container * {
     font-size: 16px !important;
 }
 .gradio-container h1 { font-size: 1.6rem !important; }
 .gradio-container h2 { font-size: 1.35rem !important; }
 .gradio-container h3 { font-size: 1.15rem !important; }
-
-/* ── Light mode — explicit overrides so OS dark-mode is ignored ── */
-:root[data-theme="light"] body,
-:root[data-theme="light"] .gradio-container {
-    background-color: #f3f4f6 !important;
-    color: #111827 !important;
-}
-:root[data-theme="light"] .block,
-:root[data-theme="light"] .panel,
-:root[data-theme="light"] .form {
-    background-color: #ffffff !important;
-    border-color: #e5e7eb !important;
-}
-:root[data-theme="light"] label,
-:root[data-theme="light"] .label-wrap span,
-:root[data-theme="light"] p,
-:root[data-theme="light"] li,
-:root[data-theme="light"] .markdown * {
-    color: #111827 !important;
-}
-:root[data-theme="light"] input,
-:root[data-theme="light"] textarea,
-:root[data-theme="light"] select {
-    background-color: #ffffff !important;
-    color: #111827 !important;
-    border-color: #d1d5db !important;
-}
-:root[data-theme="light"] .tabs > .tab-nav > button {
-    background-color: #f9fafb !important;
-    color: #374151 !important;
-    border-color: #e5e7eb !important;
-}
-:root[data-theme="light"] .tabs > .tab-nav > button.selected {
-    background-color: #ffffff !important;
-    color: #111827 !important;
-}
-:root[data-theme="light"] table,
-:root[data-theme="light"] th,
-:root[data-theme="light"] td {
-    background-color: #ffffff !important;
-    color: #111827 !important;
-    border-color: #e5e7eb !important;
-}
-
-/* ── Dark mode — grey palette ───────────────────────────── */
-:root[data-theme="dark"] body,
-:root[data-theme="dark"] .gradio-container {
-    background-color: #2e2e2e !important;
-    color: #e0e0e0 !important;
-}
-:root[data-theme="dark"] .block,
-:root[data-theme="dark"] .panel,
-:root[data-theme="dark"] .form,
-:root[data-theme="dark"] footer {
-    background-color: #3a3a3a !important;
-    border-color: #505050 !important;
-}
-:root[data-theme="dark"] label,
-:root[data-theme="dark"] .label-wrap span,
-:root[data-theme="dark"] p,
-:root[data-theme="dark"] li,
-:root[data-theme="dark"] .markdown * {
-    color: #e0e0e0 !important;
-}
-:root[data-theme="dark"] input,
-:root[data-theme="dark"] textarea,
-:root[data-theme="dark"] select {
-    background-color: #444444 !important;
-    color: #e0e0e0 !important;
-    border-color: #606060 !important;
-}
-:root[data-theme="dark"] .tabs > .tab-nav > button {
-    background-color: #3a3a3a !important;
-    color: #c8c8c8 !important;
-    border-color: #505050 !important;
-}
-:root[data-theme="dark"] .tabs > .tab-nav > button.selected {
-    background-color: #505050 !important;
-    color: #ffffff !important;
-}
-:root[data-theme="dark"] button.primary {
-    background-color: #5a7a9a !important;
-    color: #ffffff !important;
-}
-:root[data-theme="dark"] button.stop {
-    background-color: #8a4a4a !important;
-    color: #ffffff !important;
-}
-:root[data-theme="dark"] table,
-:root[data-theme="dark"] th,
-:root[data-theme="dark"] td {
-    background-color: #3a3a3a !important;
-    color: #e0e0e0 !important;
-    border-color: #555555 !important;
-}
-"""
-
-DARK_MODE_JS = """
-() => {
-    const stored = localStorage.getItem('plibTheme') || 'light';
-    document.documentElement.setAttribute('data-theme', stored);
-}
 """
 
 
-class _ThreadLocalWriter:
-    """Stdout proxy that routes writes from one target thread into a queue."""
-
-    def __init__(self, target_thread, q, original):
-        self._target = target_thread
-        self._q = q
-        self._original = original
-
-    def write(self, text):
-        if threading.current_thread() is self._target:
-            if text:
-                self._q.put(text)
-            return len(text)
-        return self._original.write(text)
-
-    def flush(self):
-        self._original.flush()
-
-
-def _run_with_streaming(fn, *args, **kwargs):
-    """Run *fn* in a background thread and yield the growing log string in real-time.
-
-    Captures both sys.stdout and root logger output from the worker thread.
-    Each yield emits the full accumulated log so far (suitable for a Gradio
-    Textbox that replaces content on each yield).
-
-    Raises whatever exception *fn* raised, after the thread finishes.
-    """
-    q = queue.Queue()
-    exc_holder = [None]
-
-    def worker():
-        original_stdout = sys.stdout
-        writer = _ThreadLocalWriter(threading.current_thread(), q, original_stdout)
-        sys.stdout = writer
-        root_logger = logging.getLogger()
-        handler = logging.StreamHandler(writer)
-        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-        root_logger.addHandler(handler)
-        try:
-            fn(*args, **kwargs)
-        except Exception as e:
-            exc_holder[0] = e
-        finally:
-            sys.stdout = original_stdout
-            root_logger.removeHandler(handler)
-            q.put(None)  # sentinel
-
-    t = threading.Thread(target=worker, daemon=True)
-    t.start()
-
-    log = ""
-    while True:
-        try:
-            chunk = q.get(timeout=0.1)
-        except queue.Empty:
-            if log:
-                yield log
-            continue
-        if chunk is None:
-            break
-        log += chunk
-        yield log
-
-    t.join()
-    if exc_holder[0] is not None:
-        raise exc_holder[0]
-
+# ── Handlers ──────────────────────────────────────────────────────────────────
 
 def add_document_handler(url: str, name: str, cookies_path: str):
     url = url.strip()
@@ -249,14 +81,6 @@ def add_document_handler(url: str, name: str, cookies_path: str):
         yield last + f"\nERROR: {e}"
 
 
-def _doc_summary_dir() -> Path:
-    return Path(__file__).resolve().parent.parent / "doc_summary"
-
-
-def list_documents() -> list[str]:
-    return sorted(p.name for p in _doc_summary_dir().glob("*.md"))
-
-
 def view_document_handler(file_name: str) -> tuple[str, str]:
     """Return (source_url, rendered_markdown) for the selected document."""
     if not file_name:
@@ -265,7 +89,6 @@ def view_document_handler(file_name: str) -> tuple[str, str]:
     if not path.exists():
         return "", f"_File not found: {file_name}_"
     raw = path.read_text(encoding="utf-8")
-    # Strip YAML frontmatter and extract url
     url = ""
     if raw.startswith("---"):
         end = raw.find("---", 3)
@@ -318,21 +141,11 @@ def rebuild_handler(incremental: bool):
         yield last + f"\nERROR: {e}"
 
 
+# ── UI ────────────────────────────────────────────────────────────────────────
+
 def build_app() -> gr.Blocks:
-    with gr.Blocks(title="PersonalLibraryManager", theme=gr.themes.Soft(), css=CUSTOM_CSS, js=DARK_MODE_JS) as app:
-        with gr.Row():
-            gr.Markdown("## PersonalLibraryManager\nManage and query your personal document collection.")
-            dark_toggle = gr.Checkbox(label="Dark mode", value=False, scale=0, min_width=120)
-        dark_toggle.change(
-            fn=None,
-            inputs=dark_toggle,
-            outputs=[],
-            js="""(v) => {
-                const theme = v ? 'dark' : 'light';
-                document.documentElement.setAttribute('data-theme', theme);
-                localStorage.setItem('plibTheme', theme);
-            }""",
-        )
+    with gr.Blocks(title="PersonalLibraryManager", theme=gr.themes.Soft(), css=CUSTOM_CSS) as app:
+        gr.Markdown("## PersonalLibraryManager\nManage and query your personal document collection.")
 
         with gr.Tab("Add Document"):
             gr.Markdown(
@@ -340,12 +153,12 @@ def build_app() -> gr.Blocks:
                 "save it to your local library, and register it in the RAG vector index._"
             )
             url_input = gr.Textbox(
-                label="🤔 Paste the Document URL you want to add to knowledgebase. ",
+                label="Document URL",
                 placeholder="https://example.com/article  or  https://arxiv.org/pdf/...",
             )
             name_input = gr.Textbox(
                 label="Filename (optional)",
-                placeholder="😎 Give a name 'My-Article.md' — You can leave it blank, but you may not like what I generate for you.",
+                placeholder="My-Article.md — leave blank to auto-generate",
             )
             cookies_input = gr.Textbox(
                 label="Cookies file (optional — for login-gated URLs)",
@@ -359,13 +172,13 @@ def build_app() -> gr.Blocks:
                 outputs=add_output,
             )
 
-        with gr.Tab("Find document."):
+        with gr.Tab("Find Document"):
             gr.Markdown(
                 "_Search your library with a natural-language query. Returns ranked source documents "
                 "and an AI-synthesized answer (answer synthesis requires `HF_TOKEN`)._"
             )
             query_input = gr.Textbox(
-                label="A text query to find your document 📝.",
+                label="Query",
                 placeholder="What is Anthropic agent harness design?",
                 lines=2,
             )
@@ -374,7 +187,7 @@ def build_app() -> gr.Blocks:
                     label="Max Sources",
                     minimum=1, maximum=20, value=5, step=1,
                 )
-                retrieval_only_check = gr.Checkbox(label="ℹ️ Turn this ON if you only want document list without LLM summary.")
+                retrieval_only_check = gr.Checkbox(label="Retrieval only (no LLM summary)")
             query_btn = gr.Button("Search", variant="primary")
             answer_md = gr.Markdown(label="Answer")
             sources_df = gr.Dataframe(
@@ -387,11 +200,9 @@ def build_app() -> gr.Blocks:
                 inputs=[query_input, top_k_slider, retrieval_only_check],
                 outputs=[answer_md, sources_df],
             )
-        
+
         with gr.Tab("View Document"):
-            gr.Markdown(
-                "_Browse and read the AI-generated summaries saved in your library._"
-            )
+            gr.Markdown("_Browse and read the AI-generated summaries saved in your library._")
             doc_dropdown = gr.Dropdown(
                 label="Select document",
                 choices=list_documents(),
