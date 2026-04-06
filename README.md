@@ -75,6 +75,10 @@ Later, when you would like to recall things you have seen about a specific topic
 
 Then, you can use the built-in `view document` option to skim the summary of the document --- or you can follow the original URL to see the original document.
 
+## Hint
+
+If you fork the repo, remove `@/doc_summary` folder from .gitignore, you will be able to get a cloud sync version of all your document on all your computer devices.
+
 
 ## Quick start - CLI
 
