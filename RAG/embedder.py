@@ -25,8 +25,8 @@ def get_model():
         if _is_cached(EMBEDDING_MODEL):
             print(f"Loading embedding model '{EMBEDDING_MODEL}' from local cache...")
         else:
-            print(f"Downloading embedding model '{EMBEDDING_MODEL}' (~130MB, one-time)...")
-        _model = SentenceTransformer(EMBEDDING_MODEL, cache_folder=str(MODEL_CACHE_DIR))
+            print(f"Downloading embedding model '{EMBEDDING_MODEL}' (~300MB, one-time)...")
+        _model = SentenceTransformer(EMBEDDING_MODEL, cache_folder=str(MODEL_CACHE_DIR), trust_remote_code=True)
     return _model
 
 

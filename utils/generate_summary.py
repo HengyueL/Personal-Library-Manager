@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from openai import OpenAI
 
-MODEL_ID = "openai/gpt-oss-120b"
+MODEL_ID = "google/gemma-4-26B-A4B-it"
 _client = OpenAI(
     base_url="https://router.huggingface.co/v1",
     api_key=os.environ["HF_TOKEN"],
