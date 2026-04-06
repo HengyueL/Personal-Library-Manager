@@ -156,12 +156,18 @@ def on_source_select(evt: gr.SelectData):
 
 
 def build_app() -> gr.Blocks:
-    # Pre-load the embedding model so the first search isn't slow.
-    try:
-        from RAG.embedder import get_model
-        get_model()
-    except Exception as e:
-        print(f"Warning: could not pre-load embedding model: {e}")
+    import threading
+
+    # Pre-load the embedding model in the background — UI appears immediately
+    # and the model is typically ready by the time the user types a first query.
+    def _preload_model():
+        try:
+            from RAG.embedder import get_model
+            get_model()
+        except Exception as e:
+            print(f"Warning: could not pre-load embedding model: {e}")
+
+    threading.Thread(target=_preload_model, daemon=True).start()
 
     with gr.Blocks(title="PersonalLibraryManager", theme=gr.themes.Soft(), css=CUSTOM_CSS) as app:
         gr.Markdown("## PersonalLibraryManager\nManage and query your personal document collection.")
