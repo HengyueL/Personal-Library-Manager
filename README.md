@@ -1,5 +1,8 @@
-# PersonalLibrary
+# Personal Library Manager
 This is a leisure project of mine to manage documents (research papers, tech blogs, etc) that I am interested in.
+
+
+<img src="teaser/view_document.jpg" alt="Image">
 
 ## Introduction
 
