@@ -50,7 +50,7 @@ The GUI has four tabs:
 | Tab | What it does |
 |-----|--------------|
 | **Add Document** | Fetch a URL (HTML or PDF), generate an AI summary, save it to the library, and register it in the RAG vector index. Progress streams in real-time. |
-| **Find Document** | Ask a natural-language question; returns ranked source documents and an AI-synthesized answer (requires `HF_TOKEN`). Click any filename in the results table to jump directly to View Document. |
+| **Find Document** | Ask a natural-language question; returns ranked source documents and an AI-synthesized answer (requires `HF_TOKEN`). Click any filename in the results table to jump directly to View Document. The embedding model is pre-loaded at startup so searches are fast from the first query. |
 | **View Document** | Browse and render any document in `doc_summary/` as formatted markdown; shows the original source URL. Dropdown defaults to empty — select a document to display it. |
 | **Rebuild Index** | Re-embed all documents into the vector index (full rebuild or incremental). Output streams in real-time. |
 

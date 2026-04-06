@@ -82,7 +82,7 @@ Located in `quick_start/` — run from the repo root (they add the root to `sys.
 - **`quick_start/retrieve_document.py`** — Accepts `--query` plus `--top-k` and `--retrieval-only` flags; queries the RAG system and logs ranked sources + synthesized answer.
 - **`quick_start/rebuild_knowledge_base.py`** — Rebuilds the RAG index from scratch.
 - **`quick_start/cli.py`** — Unified `plib` CLI dispatcher (registered as an entry point via `pyproject.toml`).
-- **`quick_start/gui.py`** — Gradio web UI with four tabs: Add Document, Find Document, View Document, Rebuild Index. The Add Document and Rebuild Index tabs stream log output in real-time via a background-thread + queue mechanism (`_ThreadLocalWriter` + `_run_with_streaming`). The View Document tab lists all files in `doc_summary/`, renders the selected document as formatted markdown, and displays its source URL; the dropdown defaults to empty (no document pre-selected). In the Find Document tab, clicking a filename in the "Document" column of the results table switches directly to the View Document tab and populates the document content. Ctrl+C triggers a graceful shutdown via `app.close()`.
+- **`quick_start/gui.py`** — Gradio web UI with four tabs: Add Document, Find Document, View Document, Rebuild Index. The Add Document and Rebuild Index tabs stream log output in real-time via a background-thread + queue mechanism (`_ThreadLocalWriter` + `_run_with_streaming`). The View Document tab lists all files in `doc_summary/`, renders the selected document as formatted markdown, and displays its source URL; the dropdown defaults to empty (no document pre-selected). In the Find Document tab, clicking a filename in the "Document" column of the results table switches directly to the View Document tab and populates the document content. Ctrl+C triggers a graceful shutdown via `app.close()`. The embedding model (`BAAI/bge-small-en-v1.5`) is pre-loaded eagerly in `build_app()` via `RAG.embedder.get_model()` so the first search is not slow.
 
 ## Architecture
 
@@ -131,7 +131,7 @@ fetch_document(url) → markdown string (in memory)
 |---|---|
 | `RAG/config.py` | Constants: paths, model IDs, `CHUNK_SIZE=800`, `CHUNK_OVERLAP=150`, `TOP_K_CHUNKS=8`, `TOP_K_DOCS=5` |
 | `RAG/chunking.py` | `strip_frontmatter(text)` + `chunk_text(text, size, overlap)` |
-| `RAG/embedder.py` | Lazy-load `BAAI/bge-small-en-v1.5` singleton + `embed(texts)` |
+| `RAG/embedder.py` | `BAAI/bge-small-en-v1.5` singleton + `embed(texts)`; pre-loaded at GUI startup via `get_model()` |
 | `RAG/index.py` | `build_index(rebuild=False)` — Chroma upsert pipeline |
 | `RAG/retriever.py` | `retrieve(query_text)` — Chroma search + per-file dedup |
 | `RAG/synthesizer.py` | `synthesize_answer(query, chunks)` — LLM call with citation prompt |
