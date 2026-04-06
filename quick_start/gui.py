@@ -143,99 +143,116 @@ def rebuild_handler(incremental: bool):
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
+def on_source_select(evt: gr.SelectData):
+    """Navigate to View Document tab when a Document cell is clicked in Find Document."""
+    if evt.index[1] != 1:
+        return gr.update(), gr.update(), "", ""
+    file_name = str(evt.value)
+    url, content = view_document_handler(file_name)
+    return gr.update(selected="view_tab"), gr.update(value=file_name), url, content
+
+
 def build_app() -> gr.Blocks:
     with gr.Blocks(title="PersonalLibraryManager", theme=gr.themes.Soft(), css=CUSTOM_CSS) as app:
         gr.Markdown("## PersonalLibraryManager\nManage and query your personal document collection.")
 
-        with gr.Tab("Add Document"):
-            gr.Markdown(
-                "_Fetch a document (HTML or PDF) from a URL, generate an AI summary, "
-                "save it to your local library, and register it in the RAG vector index._"
-            )
-            url_input = gr.Textbox(
-                label="Document URL",
-                placeholder="https://example.com/article  or  https://arxiv.org/pdf/...",
-            )
-            name_input = gr.Textbox(
-                label="Filename (optional)",
-                placeholder="My-Article.md — leave blank to auto-generate",
-            )
-            cookies_input = gr.Textbox(
-                label="Cookies file (optional — for login-gated URLs)",
-                placeholder="/path/to/cookies.txt — exported via 'Get cookies.txt LOCALLY'",
-            )
-            add_btn = gr.Button("Add to Library", variant="primary")
-            add_output = gr.Textbox(label="Status", interactive=False, lines=8)
-            add_btn.click(
-                fn=add_document_handler,
-                inputs=[url_input, name_input, cookies_input],
-                outputs=add_output,
-            )
-
-        with gr.Tab("Find Document"):
-            gr.Markdown(
-                "_Search your library with a natural-language query. Returns ranked source documents "
-                "and an AI-synthesized answer (answer synthesis requires `HF_TOKEN`)._"
-            )
-            query_input = gr.Textbox(
-                label="Query",
-                placeholder="What is Anthropic agent harness design?",
-                lines=2,
-            )
-            with gr.Row():
-                top_k_slider = gr.Slider(
-                    label="Max Sources",
-                    minimum=1, maximum=20, value=5, step=1,
+        with gr.Tabs() as tabs:
+            with gr.Tab("Add Document"):
+                gr.Markdown(
+                    "_Fetch a document (HTML or PDF) from a URL, generate an AI summary, "
+                    "save it to your local library, and register it in the RAG vector index._"
                 )
-                retrieval_only_check = gr.Checkbox(label="Retrieval only (no LLM summary)")
-            query_btn = gr.Button("Search", variant="primary")
-            answer_md = gr.Markdown(label="Answer")
-            sources_df = gr.Dataframe(
-                headers=["Rank", "Document", "Score", "URL"],
-                label="Sources",
-                interactive=False,
-            )
-            query_btn.click(
-                fn=query_handler,
-                inputs=[query_input, top_k_slider, retrieval_only_check],
-                outputs=[answer_md, sources_df],
-            )
+                url_input = gr.Textbox(
+                    label="Document URL",
+                    placeholder="https://example.com/article  or  https://arxiv.org/pdf/...",
+                )
+                name_input = gr.Textbox(
+                    label="Filename (optional)",
+                    placeholder="My-Article.md — leave blank to auto-generate",
+                )
+                cookies_input = gr.Textbox(
+                    label="Cookies file (optional — for login-gated URLs)",
+                    placeholder="/path/to/cookies.txt — exported via 'Get cookies.txt LOCALLY'",
+                )
+                add_btn = gr.Button("Add to Library", variant="primary")
+                add_output = gr.Textbox(label="Status", interactive=False, lines=8)
+                add_btn.click(
+                    fn=add_document_handler,
+                    inputs=[url_input, name_input, cookies_input],
+                    outputs=add_output,
+                )
 
-        with gr.Tab("View Document"):
-            gr.Markdown("_Browse and read the AI-generated summaries saved in your library._")
-            doc_dropdown = gr.Dropdown(
-                label="Select document",
-                choices=list_documents(),
-                interactive=True,
-            )
-            refresh_btn = gr.Button("Refresh list")
-            source_url = gr.Textbox(label="Source URL", interactive=False)
-            doc_md = gr.Markdown()
-            refresh_btn.click(
-                fn=lambda: gr.update(choices=list_documents()),
-                inputs=[],
-                outputs=doc_dropdown,
-            )
-            doc_dropdown.change(
-                fn=view_document_handler,
-                inputs=doc_dropdown,
-                outputs=[source_url, doc_md],
-            )
+            with gr.Tab("Find Document"):
+                gr.Markdown(
+                    "_Search your library with a natural-language query. Returns ranked source documents "
+                    "and an AI-synthesized answer (answer synthesis requires `HF_TOKEN`)._"
+                )
+                query_input = gr.Textbox(
+                    label="Query",
+                    placeholder="What is Anthropic agent harness design?",
+                    lines=2,
+                )
+                with gr.Row():
+                    top_k_slider = gr.Slider(
+                        label="Max Sources",
+                        minimum=1, maximum=20, value=5, step=1,
+                    )
+                    retrieval_only_check = gr.Checkbox(label="Retrieval only (no LLM summary)")
+                query_btn = gr.Button("Search", variant="primary")
+                answer_md = gr.Markdown(label="Answer")
+                sources_df = gr.Dataframe(
+                    headers=["Rank", "Document", "Score", "URL"],
+                    label="Sources — click a Document name to open it in View Document",
+                    interactive=False,
+                )
+                query_btn.click(
+                    fn=query_handler,
+                    inputs=[query_input, top_k_slider, retrieval_only_check],
+                    outputs=[answer_md, sources_df],
+                )
 
-        with gr.Tab("Rebuild Index"):
-            gr.Markdown(
-                "_Rebuild the RAG vector index from all summaries in `doc_summary/`. "
-                "Use **Incremental** mode to add only new documents without wiping the existing index._\n\n"
-                "Click **Rebuild Index** to wipe the existing vector index and re-embed all documents."
-            )
-            incremental_check = gr.Checkbox(label="Incremental (skip already-indexed documents)")
-            rebuild_btn = gr.Button("Rebuild Index", variant="stop")
-            rebuild_output = gr.Textbox(label="Output", interactive=False, lines=8)
-            rebuild_btn.click(
-                fn=rebuild_handler,
-                inputs=incremental_check,
-                outputs=rebuild_output,
-            )
+            with gr.Tab("View Document", id="view_tab"):
+                gr.Markdown("_Browse and read the AI-generated summaries saved in your library._")
+                doc_dropdown = gr.Dropdown(
+                    label="Select document",
+                    choices=list_documents(),
+                    value=None,
+                    interactive=True,
+                )
+                refresh_btn = gr.Button("Refresh list")
+                source_url = gr.Textbox(label="Source URL", interactive=False)
+                doc_md = gr.Markdown()
+                refresh_btn.click(
+                    fn=lambda: gr.update(choices=list_documents()),
+                    inputs=[],
+                    outputs=doc_dropdown,
+                )
+                doc_dropdown.change(
+                    fn=view_document_handler,
+                    inputs=doc_dropdown,
+                    outputs=[source_url, doc_md],
+                )
+
+            with gr.Tab("Rebuild Index"):
+                gr.Markdown(
+                    "_Rebuild the RAG vector index from all summaries in `doc_summary/`. "
+                    "Use **Incremental** mode to add only new documents without wiping the existing index._\n\n"
+                    "Click **Rebuild Index** to wipe the existing vector index and re-embed all documents."
+                )
+                incremental_check = gr.Checkbox(label="Incremental (skip already-indexed documents)")
+                rebuild_btn = gr.Button("Rebuild Index", variant="stop")
+                rebuild_output = gr.Textbox(label="Output", interactive=False, lines=8)
+                rebuild_btn.click(
+                    fn=rebuild_handler,
+                    inputs=incremental_check,
+                    outputs=rebuild_output,
+                )
+
+        sources_df.select(
+            fn=on_source_select,
+            inputs=[],
+            outputs=[tabs, doc_dropdown, source_url, doc_md],
+        )
 
     return app
 

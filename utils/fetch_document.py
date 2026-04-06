@@ -76,6 +76,18 @@ def _is_pdf(url: str, session: requests.Session) -> bool:
         return False
 
 
+def _fetch_pdf_from_response(resp: requests.Response, url: str) -> str:
+    """Convert an already-fetched PDF response bytes to markdown."""
+    resp.raise_for_status()
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(resp.content)
+        tmp_path = Path(tmp.name)
+    try:
+        return MarkItDown().convert(str(tmp_path)).text_content
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
 def fetch_document(url: str, cookies_path: str | None = None) -> str:
     """
     Fetch a document from a URL and return its content as a markdown string.
@@ -100,12 +112,22 @@ def fetch_document(url: str, cookies_path: str | None = None) -> str:
         if auto:
             session.cookies = auto
 
-    if _is_pdf(url, session):
-        logger.info("Detected PDF; converting with MarkItDown")
+    # Fast path: extension check requires no network round-trip
+    if urlparse(url).path.lower().endswith(".pdf"):
+        logger.info("Detected PDF by extension; converting with MarkItDown")
         return _fetch_pdf(url, session)
+
+    # Single GET — inspect Content-Type to route (saves HEAD round-trip for PDFs
+    # served without a .pdf extension, e.g. arxiv.org/pdf/...)
+    resp = session.get(url, allow_redirects=True)
+    _check_auth_failure(resp, url)
+
+    if "application/pdf" in resp.headers.get("Content-Type", ""):
+        logger.info("Detected PDF by Content-Type; converting with MarkItDown")
+        return _fetch_pdf_from_response(resp, url)
     else:
         logger.info("Detected HTML; converting with html2text")
-        return _fetch_html(url, session)
+        return html2text.html2text(resp.text)
 
 
 def _fetch_html(url: str, session: requests.Session) -> str:

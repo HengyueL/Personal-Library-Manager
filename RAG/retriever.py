@@ -13,9 +13,15 @@ from RAG.config import (
 from RAG import embedder
 
 
+_collection = None
+
+
 def _get_collection():
-    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-    return client.get_collection(name=COLLECTION_NAME)
+    global _collection
+    if _collection is None:
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+        _collection = client.get_collection(name=COLLECTION_NAME)
+    return _collection
 
 
 def retrieve(
@@ -81,8 +87,5 @@ def retrieve(
             "content_type": meta["content_type"],
             "chunk_index": meta.get("chunk_index", 0),
         })
-
-    # Sort chunks by score descending
-    chunks.sort(key=lambda x: x["score"], reverse=True)
 
     return {"ranked_docs": ranked_docs, "chunks": chunks}

@@ -51,6 +51,16 @@ def get_indexed_ids(collection) -> set[str]:
     return set(result["ids"])
 
 
+def _read_summary_doc(file_name: str) -> tuple[str, str, str]:
+    """Read a summary doc; return (doc_id, body, url)."""
+    summary_path = DOC_SUMMARY_PATH / file_name
+    with open(summary_path, "r", encoding="utf-8") as f:
+        text = f.read()
+    body, frontmatter = strip_frontmatter(text)
+    url = frontmatter.get("url", "")
+    return f"summary::{file_name}", body, url
+
+
 def index_summary_doc(file_name: str, collection) -> None:
     """Read a summary doc, extract URL from frontmatter, embed it, and upsert into the collection."""
     summary_path = DOC_SUMMARY_PATH / file_name
@@ -86,18 +96,39 @@ def build_index(rebuild: bool = False) -> None:
         print("No markdown files found in doc_summary/.")
         return
 
-    total = 0
-    for doc_path in summary_files:
-        file_name = doc_path.name
-        summary_id = f"summary::{file_name}"
+    to_index = [
+        doc_path.name for doc_path in summary_files
+        if f"summary::{doc_path.name}" not in existing_ids or rebuild
+    ]
+    to_skip = [
+        doc_path.name for doc_path in summary_files
+        if f"summary::{doc_path.name}" in existing_ids and not rebuild
+    ]
 
-        if summary_id in existing_ids and not rebuild:
-            print(f"Skipping {file_name} (already indexed).")
-        else:
-            index_summary_doc(file_name, collection)
+    for file_name in to_skip:
+        print(f"Skipping {file_name} (already indexed).")
+
+    if to_index:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor() as executor:
+            records = list(executor.map(_read_summary_doc, to_index))
+
+        bodies = [body for _, body, _ in records]
+        vectors = embedder.embed(bodies)
+
+        collection.upsert(
+            ids=[doc_id for doc_id, _, _ in records],
+            embeddings=vectors,
+            documents=bodies,
+            metadatas=[
+                {"source": fn, "content_type": "summary", "original_url": url}
+                for fn, (_, _, url) in zip(to_index, records)
+            ],
+        )
+        for file_name in to_index:
             print(f"Indexed {file_name}.")
-            total += 1
 
+    total = len(to_index)
     print(f"\nDone. Indexed {total} summary doc(s).")
     print(f"Total vectors in collection: {collection.count()}")
 

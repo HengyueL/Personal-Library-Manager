@@ -132,32 +132,57 @@ class TestFetchPdf:
 
 class TestFetchDocument:
     def test_pdf_url_calls_fetch_pdf_and_returns_content(self):
-        with patch("utils.fetch_document._is_pdf", return_value=True):
-            with patch("utils.fetch_document._fetch_pdf", return_value="pdf markdown") as mock_pdf:
-                with patch("utils.fetch_document._fetch_html") as mock_html:
-                    from utils.fetch_document import fetch_document
-                    result = fetch_document("https://example.com/paper.pdf")
+        # .pdf extension triggers the fast path — _fetch_pdf called directly
+        with patch("utils.fetch_document._fetch_pdf", return_value="pdf markdown") as mock_pdf:
+            with patch("utils.fetch_document._auto_cookies", return_value=None):
+                from utils.fetch_document import fetch_document
+                result = fetch_document("https://example.com/paper.pdf")
 
         mock_pdf.assert_called_once_with("https://example.com/paper.pdf", ANY)
-        mock_html.assert_not_called()
         assert result == "pdf markdown"
 
-    def test_html_url_calls_fetch_html_and_returns_content(self):
-        with patch("utils.fetch_document._is_pdf", return_value=False):
-            with patch("utils.fetch_document._fetch_html", return_value="html markdown") as mock_html:
-                with patch("utils.fetch_document._fetch_pdf") as mock_pdf:
+    def test_html_url_calls_html2text_and_returns_content(self):
+        # Non-.pdf URL: single GET, Content-Type=text/html → html2text branch
+        session, _ = _mock_session(
+            headers={"Content-Type": "text/html; charset=utf-8"},
+            text="<html><body>body</body></html>",
+        )
+        with patch("utils.fetch_document.requests.Session", return_value=session):
+            with patch("utils.fetch_document._auto_cookies", return_value=None):
+                with patch("utils.fetch_document.html2text.html2text", return_value="html markdown") as mock_h2t:
                     from utils.fetch_document import fetch_document
                     result = fetch_document("https://example.com/article")
 
-        mock_html.assert_called_once_with("https://example.com/article", ANY)
-        mock_pdf.assert_not_called()
+        session.get.assert_called_once()
+        mock_h2t.assert_called_once()
         assert result == "html markdown"
 
+    def test_non_extension_pdf_url_calls_fetch_pdf_from_response(self):
+        # Non-.pdf URL but Content-Type=application/pdf → _fetch_pdf_from_response branch
+        session, mock_resp = _mock_session(
+            headers={"Content-Type": "application/pdf"},
+            content=b"%PDF fake",
+        )
+        with patch("utils.fetch_document.requests.Session", return_value=session):
+            with patch("utils.fetch_document._auto_cookies", return_value=None):
+                with patch("utils.fetch_document._fetch_pdf_from_response", return_value="pdf text") as mock_pfr:
+                    from utils.fetch_document import fetch_document
+                    result = fetch_document("https://arxiv.org/pdf/2303.08774")
+
+        session.get.assert_called_once()
+        mock_pfr.assert_called_once()
+        assert result == "pdf text"
+
     def test_returns_string(self):
-        with patch("utils.fetch_document._is_pdf", return_value=False):
-            with patch("utils.fetch_document._fetch_html", return_value="some content"):
-                from utils.fetch_document import fetch_document
-                result = fetch_document("https://example.com/article")
+        session, _ = _mock_session(
+            headers={"Content-Type": "text/html"},
+            text="<html><body>content</body></html>",
+        )
+        with patch("utils.fetch_document.requests.Session", return_value=session):
+            with patch("utils.fetch_document._auto_cookies", return_value=None):
+                with patch("utils.fetch_document.html2text.html2text", return_value="some content"):
+                    from utils.fetch_document import fetch_document
+                    result = fetch_document("https://example.com/article")
         assert isinstance(result, str)
 
 
@@ -184,10 +209,11 @@ class TestLoadCookies:
         cookies_file = tmp_path / "cookies.txt"
         cookies_file.write_text("# Netscape HTTP Cookie File\n")
 
+        session, _ = _mock_session(headers={"Content-Type": "text/html"}, text="content")
         with patch("utils.fetch_document._load_cookies") as mock_load:
             with patch("utils.fetch_document._auto_cookies") as mock_auto:
-                with patch("utils.fetch_document._is_pdf", return_value=False):
-                    with patch("utils.fetch_document._fetch_html", return_value="content"):
+                with patch("utils.fetch_document.requests.Session", return_value=session):
+                    with patch("utils.fetch_document.html2text.html2text", return_value="content"):
                         from utils.fetch_document import fetch_document
                         fetch_document("https://example.com", cookies_path=str(cookies_file))
 
@@ -195,10 +221,11 @@ class TestLoadCookies:
         mock_auto.assert_not_called()
 
     def test_no_cookies_path_attempts_auto_detect(self):
+        session, _ = _mock_session(headers={"Content-Type": "text/html"}, text="content")
         with patch("utils.fetch_document._auto_cookies", return_value=None) as mock_auto:
             with patch("utils.fetch_document._load_cookies") as mock_load:
-                with patch("utils.fetch_document._is_pdf", return_value=False):
-                    with patch("utils.fetch_document._fetch_html", return_value="content"):
+                with patch("utils.fetch_document.requests.Session", return_value=session):
+                    with patch("utils.fetch_document.html2text.html2text", return_value="content"):
                         from utils.fetch_document import fetch_document
                         fetch_document("https://example.com")
 
