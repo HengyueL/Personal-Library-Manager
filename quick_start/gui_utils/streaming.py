@@ -24,6 +24,12 @@ class _ThreadLocalWriter:
     def flush(self):
         self._original.flush()
 
+    def isatty(self):
+        return False
+
+    def fileno(self):
+        return self._original.fileno()
+
 
 def _run_with_streaming(fn, *args, **kwargs):
     """Run *fn* in a background thread and yield the growing log string in real-time.
