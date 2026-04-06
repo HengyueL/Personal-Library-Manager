@@ -10,6 +10,118 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import gradio as gr
 
+CUSTOM_CSS = """
+/* ── Font size ─────────────────────────────────────────── */
+.gradio-container, .gradio-container * {
+    font-size: 16px !important;
+}
+.gradio-container h1 { font-size: 1.6rem !important; }
+.gradio-container h2 { font-size: 1.35rem !important; }
+.gradio-container h3 { font-size: 1.15rem !important; }
+
+/* ── Light mode — explicit overrides so OS dark-mode is ignored ── */
+:root[data-theme="light"] body,
+:root[data-theme="light"] .gradio-container {
+    background-color: #f3f4f6 !important;
+    color: #111827 !important;
+}
+:root[data-theme="light"] .block,
+:root[data-theme="light"] .panel,
+:root[data-theme="light"] .form {
+    background-color: #ffffff !important;
+    border-color: #e5e7eb !important;
+}
+:root[data-theme="light"] label,
+:root[data-theme="light"] .label-wrap span,
+:root[data-theme="light"] p,
+:root[data-theme="light"] li,
+:root[data-theme="light"] .markdown * {
+    color: #111827 !important;
+}
+:root[data-theme="light"] input,
+:root[data-theme="light"] textarea,
+:root[data-theme="light"] select {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    border-color: #d1d5db !important;
+}
+:root[data-theme="light"] .tabs > .tab-nav > button {
+    background-color: #f9fafb !important;
+    color: #374151 !important;
+    border-color: #e5e7eb !important;
+}
+:root[data-theme="light"] .tabs > .tab-nav > button.selected {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+}
+:root[data-theme="light"] table,
+:root[data-theme="light"] th,
+:root[data-theme="light"] td {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    border-color: #e5e7eb !important;
+}
+
+/* ── Dark mode — grey palette ───────────────────────────── */
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .gradio-container {
+    background-color: #2e2e2e !important;
+    color: #e0e0e0 !important;
+}
+:root[data-theme="dark"] .block,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .form,
+:root[data-theme="dark"] footer {
+    background-color: #3a3a3a !important;
+    border-color: #505050 !important;
+}
+:root[data-theme="dark"] label,
+:root[data-theme="dark"] .label-wrap span,
+:root[data-theme="dark"] p,
+:root[data-theme="dark"] li,
+:root[data-theme="dark"] .markdown * {
+    color: #e0e0e0 !important;
+}
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+    background-color: #444444 !important;
+    color: #e0e0e0 !important;
+    border-color: #606060 !important;
+}
+:root[data-theme="dark"] .tabs > .tab-nav > button {
+    background-color: #3a3a3a !important;
+    color: #c8c8c8 !important;
+    border-color: #505050 !important;
+}
+:root[data-theme="dark"] .tabs > .tab-nav > button.selected {
+    background-color: #505050 !important;
+    color: #ffffff !important;
+}
+:root[data-theme="dark"] button.primary {
+    background-color: #5a7a9a !important;
+    color: #ffffff !important;
+}
+:root[data-theme="dark"] button.stop {
+    background-color: #8a4a4a !important;
+    color: #ffffff !important;
+}
+:root[data-theme="dark"] table,
+:root[data-theme="dark"] th,
+:root[data-theme="dark"] td {
+    background-color: #3a3a3a !important;
+    color: #e0e0e0 !important;
+    border-color: #555555 !important;
+}
+"""
+
+DARK_MODE_JS = """
+() => {
+    const stored = localStorage.getItem('plibTheme') || 'light';
+    document.documentElement.setAttribute('data-theme', stored);
+}
+"""
+
 
 class _ThreadLocalWriter:
     """Stdout proxy that routes writes from one target thread into a queue."""
@@ -207,17 +319,33 @@ def rebuild_handler(incremental: bool):
 
 
 def build_app() -> gr.Blocks:
-    with gr.Blocks(title="PersonalLibrary", theme=gr.themes.Soft()) as app:
-        gr.Markdown("## PersonalLibrary\nManage and query your personal document collection.")
+    with gr.Blocks(title="PersonalLibraryManager", theme=gr.themes.Soft(), css=CUSTOM_CSS, js=DARK_MODE_JS) as app:
+        with gr.Row():
+            gr.Markdown("## PersonalLibraryManager\nManage and query your personal document collection.")
+            dark_toggle = gr.Checkbox(label="Dark mode", value=False, scale=0, min_width=120)
+        dark_toggle.change(
+            fn=None,
+            inputs=dark_toggle,
+            outputs=[],
+            js="""(v) => {
+                const theme = v ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('plibTheme', theme);
+            }""",
+        )
 
         with gr.Tab("Add Document"):
+            gr.Markdown(
+                "_Fetch a document (HTML or PDF) from a URL, generate an AI summary, "
+                "save it to your local library, and register it in the RAG vector index._"
+            )
             url_input = gr.Textbox(
-                label="Document URL",
+                label="🤔 Paste the Document URL you want to add to knowledgebase. ",
                 placeholder="https://example.com/article  or  https://arxiv.org/pdf/...",
             )
             name_input = gr.Textbox(
                 label="Filename (optional)",
-                placeholder="My-Article.md — leave blank to auto-generate from title",
+                placeholder="😎 Give a name 'My-Article.md' — You can leave it blank, but you may not like what I generate for you.",
             )
             cookies_input = gr.Textbox(
                 label="Cookies file (optional — for login-gated URLs)",
@@ -231,7 +359,39 @@ def build_app() -> gr.Blocks:
                 outputs=add_output,
             )
 
+        with gr.Tab("Find document."):
+            gr.Markdown(
+                "_Search your library with a natural-language query. Returns ranked source documents "
+                "and an AI-synthesized answer (answer synthesis requires `HF_TOKEN`)._"
+            )
+            query_input = gr.Textbox(
+                label="A text query to find your document 📝.",
+                placeholder="What is Anthropic agent harness design?",
+                lines=2,
+            )
+            with gr.Row():
+                top_k_slider = gr.Slider(
+                    label="Max Sources",
+                    minimum=1, maximum=20, value=5, step=1,
+                )
+                retrieval_only_check = gr.Checkbox(label="ℹ️ Turn this ON if you only want document list without LLM summary.")
+            query_btn = gr.Button("Search", variant="primary")
+            answer_md = gr.Markdown(label="Answer")
+            sources_df = gr.Dataframe(
+                headers=["Rank", "Document", "Score", "URL"],
+                label="Sources",
+                interactive=False,
+            )
+            query_btn.click(
+                fn=query_handler,
+                inputs=[query_input, top_k_slider, retrieval_only_check],
+                outputs=[answer_md, sources_df],
+            )
+        
         with gr.Tab("View Document"):
+            gr.Markdown(
+                "_Browse and read the AI-generated summaries saved in your library._"
+            )
             doc_dropdown = gr.Dropdown(
                 label="Select document",
                 choices=list_documents(),
@@ -251,35 +411,11 @@ def build_app() -> gr.Blocks:
                 outputs=[source_url, doc_md],
             )
 
-        with gr.Tab("Query Library"):
-            query_input = gr.Textbox(
-                label="Your Question",
-                placeholder="What does X say about Y?",
-                lines=2,
-            )
-            with gr.Row():
-                top_k_slider = gr.Slider(
-                    label="Max Sources",
-                    minimum=1, maximum=20, value=5, step=1,
-                )
-                retrieval_only_check = gr.Checkbox(label="Retrieval only (skip LLM answer)")
-            query_btn = gr.Button("Search", variant="primary")
-            answer_md = gr.Markdown(label="Answer")
-            sources_df = gr.Dataframe(
-                headers=["Rank", "Document", "Score", "URL"],
-                label="Sources",
-                interactive=False,
-            )
-            query_btn.click(
-                fn=query_handler,
-                inputs=[query_input, top_k_slider, retrieval_only_check],
-                outputs=[answer_md, sources_df],
-            )
-
         with gr.Tab("Rebuild Index"):
             gr.Markdown(
-                "**Wipes the existing vector index and re-embeds all documents** in `doc_summary/`.\n\n"
-                "Use *Incremental* mode to only add newly-added documents without wiping existing data."
+                "_Rebuild the RAG vector index from all summaries in `doc_summary/`. "
+                "Use **Incremental** mode to add only new documents without wiping the existing index._\n\n"
+                "Click **Rebuild Index** to wipe the existing vector index and re-embed all documents."
             )
             incremental_check = gr.Checkbox(label="Incremental (skip already-indexed documents)")
             rebuild_btn = gr.Button("Rebuild Index", variant="stop")
@@ -294,4 +430,11 @@ def build_app() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    build_app().launch()
+    app = build_app()
+    try:
+        app.launch()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        app.close()
+        print("\nShutdown complete.")
