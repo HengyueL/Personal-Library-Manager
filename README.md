@@ -15,6 +15,7 @@ Now that LLMs are actually useful (and not just fancy autocomplete), we finally 
 So I built this project by putting myself back into my Ph.D. shoes—sleep-deprived, over-caffeinated, and constantly losing track of PDFs—with two guiding principles:
 
     Frugality — My wallet during my Ph.D. had strong opinions. This must be free.
+
     Lightweight — If it does more than it needs to, it’s already too much.
 
 ## Set up
@@ -22,7 +23,15 @@ So I built this project by putting myself back into my Ph.D. shoes—sleep-depri
 ### Pre-requisite
 
 1. `uv` --- for managing venv and dependecies
-2. Huggingface API tokens --- Create an account in `https://huggingface.co/`, put `export HF_TOKEN=<your_huggingface_token>` into `~/.bashrc` or `~/.zshrc` depending on your OS.
+
+2. Add Ollama API tokens (have **more** free API calls as of 2026/04) --- Create an account in `https://ollama.com/`, generate an API key, then put `export OLLAMA_API_KEY=<your_ollama_api_key>` into `~/.bashrc` or `~/.zshrc` depending on your OS.
+
+**or** 
+
+2. Add Huggingface API tokens (have **fewer** free API calls as of 2026/04) --- Create an account in `https://huggingface.co/`, generate an API key, put `export HF_TOKEN=<your_huggingface_token>` into `~/.bashrc` or `~/.zshrc` depending on your OS.
+
+3. Based on your selection of `ollama` or `huggingface`, update the following line in `@RAG/config.py` accordingly:
+```BACKEND = "ollama"  # "huggingface" is the other option.```
 
 ### Preparing venv and dependencies
 
@@ -118,5 +127,5 @@ for doc in result["sources"]:
 
 This project is heavily vibed with Claude Code.
 
-This project uses HuggingFace free inference API (please keep it free).
+This project uses HuggingFace & Ollama free inference API (please keep it free, thank you!).
 

@@ -2,17 +2,11 @@
     Use LLM to generate an abstract/summary of a document and save it to doc_summary/.
 """
 
-import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse
-from openai import OpenAI
 
-MODEL_ID = "google/gemma-4-26B-A4B-it"
-_client = OpenAI(
-    base_url="https://router.huggingface.co/v1",
-    api_key=os.environ["HF_TOKEN"],
-)
+from utils.llm_client import complete
 
 DOC_SUMMARY_PATH = Path(__file__).parent.parent / "doc_summary"
 
@@ -63,19 +57,16 @@ Document content:
 
 Please provide a well-structured summary that includes:
 1. The main topic/purpose of the document
-2. Key points and findings
+2. Key points and findings (arrange them in a table)
 3. Any important conclusions or recommendations
 
 Summary:"""
 
-    completion = _client.chat.completions.create(
-        model=MODEL_ID,
+    return complete(
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
         max_tokens=1000,
+        temperature=0.7,
     )
-
-    return completion.choices[0].message.content
 
 
 def generate_summary_with_filename(content: str, url: str) -> tuple[str, str]:
@@ -100,16 +91,13 @@ Respond in exactly this format (no extra text before FILENAME):
 FILENAME: <proposed-filename.md>
 
 SUMMARY:
-<well-structured summary including main  topic/purpose of the document, key points and findings, and conclusions>"""
+<well-structured summary including main topic/purpose of the document, key points and findings (arrange them in a table), and conclusions>"""
 
-    completion = _client.chat.completions.create(
-        model=MODEL_ID,
+    response = complete(
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
         max_tokens=1200,
-    )
-
-    response = completion.choices[0].message.content or ""
+        temperature=0.7,
+    ) or ""
     return _parse_filename_and_summary(response, url)
 
 

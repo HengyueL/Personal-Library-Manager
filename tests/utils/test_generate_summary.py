@@ -4,44 +4,32 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-def _make_mock_client(answer: str) -> MagicMock:
-    mock_choice = MagicMock()
-    mock_choice.message.content = answer
-    mock_completion = MagicMock()
-    mock_completion.choices = [mock_choice]
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = mock_completion
-    return mock_client
-
-
 class TestGenerateSummary:
     def test_returns_llm_response(self):
-        mock_client = _make_mock_client("This is a summary.")
-
-        with patch("utils.generate_summary._client", mock_client):
+        with patch("utils.generate_summary.complete", return_value="This is a summary."):
             from utils.generate_summary import generate_summary
             result = generate_summary("# Title\n\nSome content.")
 
         assert result == "This is a summary."
 
     def test_prompt_includes_document_content(self):
-        mock_client = _make_mock_client("summary")
+        mock_complete = MagicMock(return_value="summary")
 
-        with patch("utils.generate_summary._client", mock_client):
+        with patch("utils.generate_summary.complete", mock_complete):
             from utils.generate_summary import generate_summary
             generate_summary("Unique document content XYZ123.")
 
-        prompt = mock_client.chat.completions.create.call_args[1]["messages"][0]["content"]
+        prompt = mock_complete.call_args[1]["messages"][0]["content"]
         assert "Unique document content XYZ123." in prompt
 
     def test_llm_called_with_correct_model_params(self):
-        mock_client = _make_mock_client("summary")
+        mock_complete = MagicMock(return_value="summary")
 
-        with patch("utils.generate_summary._client", mock_client):
+        with patch("utils.generate_summary.complete", mock_complete):
             from utils.generate_summary import generate_summary
             generate_summary("content")
 
-        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        call_kwargs = mock_complete.call_args[1]
         assert call_kwargs["temperature"] == 0.7
         assert call_kwargs["max_tokens"] == 1000
 
@@ -49,9 +37,8 @@ class TestGenerateSummary:
 class TestGenerateSummaryWithFilename:
     def test_returns_summary_and_filename(self):
         response = "FILENAME: Anthropic-Agents.md\n\nSUMMARY:\nThis paper covers agents."
-        mock_client = _make_mock_client(response)
 
-        with patch("utils.generate_summary._client", mock_client):
+        with patch("utils.generate_summary.complete", return_value=response):
             from utils.generate_summary import generate_summary_with_filename
             summary, filename = generate_summary_with_filename("content", "https://anthropic.com/agents")
 
@@ -60,9 +47,8 @@ class TestGenerateSummaryWithFilename:
 
     def test_filename_without_md_extension_gets_extension_added(self):
         response = "FILENAME: Anthropic-Agents\n\nSUMMARY:\nSummary text."
-        mock_client = _make_mock_client(response)
 
-        with patch("utils.generate_summary._client", mock_client):
+        with patch("utils.generate_summary.complete", return_value=response):
             from utils.generate_summary import generate_summary_with_filename
             _, filename = generate_summary_with_filename("content", "https://anthropic.com/agents")
 
@@ -70,9 +56,8 @@ class TestGenerateSummaryWithFilename:
 
     def test_fallback_filename_when_llm_omits_it(self):
         response = "Here is a summary without a filename line."
-        mock_client = _make_mock_client(response)
 
-        with patch("utils.generate_summary._client", mock_client):
+        with patch("utils.generate_summary.complete", return_value=response):
             from utils.generate_summary import generate_summary_with_filename
             summary, filename = generate_summary_with_filename("content", "https://example.com/doc")
 
@@ -80,13 +65,13 @@ class TestGenerateSummaryWithFilename:
         assert summary == response
 
     def test_url_included_in_prompt(self):
-        mock_client = _make_mock_client("FILENAME: X.md\n\nSUMMARY:\nText.")
+        mock_complete = MagicMock(return_value="FILENAME: X.md\n\nSUMMARY:\nText.")
 
-        with patch("utils.generate_summary._client", mock_client):
+        with patch("utils.generate_summary.complete", mock_complete):
             from utils.generate_summary import generate_summary_with_filename
             generate_summary_with_filename("content", "https://openai.com/research")
 
-        prompt = mock_client.chat.completions.create.call_args[1]["messages"][0]["content"]
+        prompt = mock_complete.call_args[1]["messages"][0]["content"]
         assert "https://openai.com/research" in prompt
 
 

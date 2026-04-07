@@ -16,8 +16,11 @@ source .venv/bin/activate
 # Install the package and all dependencies (also registers the `plib` CLI)
 pip install -e .
 
-# Required environment variable for summary generation
+# Required env var when BACKEND = "huggingface" (default)
 export HF_TOKEN=<your_huggingface_token>
+
+# Required env var when BACKEND = "ollama"
+export OLLAMA_API_KEY=<your_ollama_api_key>
 ```
 
 ## Running Tests
@@ -82,7 +85,7 @@ Located in `quick_start/` — run from the repo root (they add the root to `sys.
 - **`quick_start/retrieve_document.py`** — Accepts `--query` plus `--top-k` and `--retrieval-only` flags; queries the RAG system and logs ranked sources + synthesized answer.
 - **`quick_start/rebuild_knowledge_base.py`** — Rebuilds the RAG index from scratch.
 - **`quick_start/cli.py`** — Unified `plib` CLI dispatcher (registered as an entry point via `pyproject.toml`).
-- **`quick_start/gui.py`** — Gradio web UI with four tabs: Add Document, Find Document, View Document, Rebuild Index. The Add Document and Rebuild Index tabs stream log output in real-time via a background-thread + queue mechanism (`_ThreadLocalWriter` + `_run_with_streaming`). The View Document tab lists all files in `doc_summary/`, renders the selected document as formatted markdown, and displays its source URL; the dropdown defaults to empty (no document pre-selected). In the Find Document tab, clicking a filename in the "Document" column of the results table switches directly to the View Document tab and populates the document content. Ctrl+C triggers a graceful shutdown via `app.close()`. The embedding model (`BAAI/bge-small-en-v1.5`) is pre-loaded eagerly in `build_app()` via `RAG.embedder.get_model()` so the first search is not slow.
+- **`quick_start/gui.py`** — Gradio web UI with four tabs: Add Document, Find Document, View Document, Rebuild Index. The Add Document tab accepts an optional cookies path for auth-gated URLs. Streaming log output is handled by helpers in `quick_start/gui_utils/` (`streaming.py` for the thread+queue mechanism, `documents.py` for listing/reading `doc_summary/`). The View Document tab lists all files in `doc_summary/`, renders the selected document as formatted markdown, and displays its source URL; the dropdown defaults to empty (no document pre-selected). In the Find Document tab, clicking a filename in the "Document" column switches directly to the View Document tab. Ctrl+C triggers a graceful shutdown via `app.close()`. The embedding model (`BAAI/bge-small-en-v1.5`) is pre-loaded eagerly in `build_app()` via `RAG.embedder.get_model()` so the first search is not slow.
 
 ## Architecture
 
@@ -114,27 +117,30 @@ fetch_document(url) → markdown string (in memory)
 
 ### Data Flow Details
 
-1. **`utils/fetch_document.py`** — `fetch_document(url) -> str`: auto-detects HTML vs PDF (URL extension then `Content-Type` HEAD request). HTML converted with `html2text`; PDFs downloaded to a temp file and converted with `markitdown`. Returns raw markdown string without frontmatter; does not write to disk.
+1. **`utils/fetch_document.py`** — `fetch_document(url, cookies_path=None) -> str`: auto-detects HTML vs PDF (URL extension then `Content-Type` HEAD request). HTML converted with `html2text`; PDFs downloaded to a temp file and converted with `markitdown`. Returns raw markdown string without frontmatter; does not write to disk. Raises `AuthRequiredError` if a 401/403 is returned; caller should retry with `cookies_path` pointing to a Netscape cookies.txt file (or rely on auto browser-cookie detection via `browser-cookie3`).
 
-2. **`utils/generate_summary.py`** — Two generation functions sharing the same HF client:
+2. **`utils/generate_summary.py`** — Two generation functions that delegate to `utils/llm_client.py`:
    - `generate_summary(content: str) -> str`: single-purpose summary call; used when the filename is already known.
    - `generate_summary_with_filename(content: str, url: str) -> tuple[str, str]`: single LLM call that returns `(summary, filename)` via a structured prompt; used when `--name` is omitted. Falls back to `Source-Document.md` if the LLM omits the filename line.
    - `save_summary(file_name, summary_text, url)`: writes to `doc_summary/<file_name>` with YAML frontmatter (`url: <source>`). Skips if file already exists.
 
 3. **`RAG/index.py`** — Reads `doc_summary/*.md`. Extracts the source URL from each file's YAML frontmatter via `strip_frontmatter()`. Embeds the summary as a single vector and upserts into Chroma. Idempotent — skips already-indexed files.
 
-4. **`RAG/query.py`** — Embeds the query, retrieves top-k summaries from Chroma, deduplicates per source file, then calls the HF LLM to synthesize a cited answer. Returns `{query, sources, answer}`. Importable as `from RAG import query`.
+4. **`utils/llm_client.py`** — Unified LLM adapter. `complete(messages, max_tokens, temperature) -> str` routes to the backend set by `BACKEND` in `RAG/config.py` (`"ollama"` or `"huggingface"`). Lazy-initializes the appropriate client singleton on first call. To switch backends, edit `BACKEND` in `RAG/config.py`.
+
+5. **`RAG/query.py`** — Embeds the query, retrieves top-k summaries from Chroma, deduplicates per source file, then synthesizes a cited answer via `utils/llm_client.py`. Returns `{query, sources, answer}`. Importable as `from RAG import query`.
 
 ### RAG Module Layout
 
 | File | Role |
 |---|---|
-| `RAG/config.py` | Constants: paths, model IDs, `CHUNK_SIZE=800`, `CHUNK_OVERLAP=150`, `TOP_K_CHUNKS=8`, `TOP_K_DOCS=5` |
+| `RAG/config.py` | Constants: paths, model IDs, `CHUNK_SIZE=800`, `CHUNK_OVERLAP=150`, `TOP_K_CHUNKS=8`, `TOP_K_DOCS=5`, `BACKEND` (active LLM backend) |
 | `RAG/chunking.py` | `strip_frontmatter(text)` + `chunk_text(text, size, overlap)` |
 | `RAG/embedder.py` | `BAAI/bge-small-en-v1.5` singleton + `embed(texts)`; pre-loaded at GUI startup via `get_model()` |
 | `RAG/index.py` | `build_index(rebuild=False)` — Chroma upsert pipeline |
 | `RAG/retriever.py` | `retrieve(query_text)` — Chroma search + per-file dedup |
-| `RAG/synthesizer.py` | `synthesize_answer(query, chunks)` — LLM call with citation prompt |
+| `RAG/synthesizer.py` | `synthesize_answer(query, chunks)` — delegates to `utils/llm_client.complete` with citation prompt |
+| `utils/llm_client.py` | `complete(messages, max_tokens, temperature)` — backend adapter; reads `BACKEND` from `RAG/config.py` |
 | `RAG/query.py` | `query(user_query, top_k_docs, synthesize)` — orchestrator + CLI |
 
 ### Indexing Scheme
@@ -152,11 +158,23 @@ url: https://example.com/original-source
 ---
 ```
 
+### LLM Backend Configuration
+
+Backend is selected by the `BACKEND` constant in `RAG/config.py` (edit the file to switch):
+
+| `BACKEND` value | Required env var | Endpoint |
+|---|---|---|
+| `"huggingface"` | `HF_TOKEN` | `https://router.huggingface.co/v1` (OpenAI-compatible) |
+| `"ollama"` | `OLLAMA_API_KEY` | `https://ollama.com` (default, overridable via `OLLAMA_HOST`) |
+
+Model IDs are overridable via `LLM_MODEL_ID` (HF) and `OLLAMA_MODEL_ID` env vars. Neither backend is needed for index building or `--retrieval-only` queries.
+
 ### External Dependencies
-- **HuggingFace Inference API** — Used for summary generation and answer synthesis; requires `HF_TOKEN` env var. Not needed for index building or `--retrieval-only` queries.
 - `sentence-transformers` — Local `BAAI/bge-small-en-v1.5` for embeddings (~130MB, downloaded on first use)
 - `chromadb` — Local persistent vector store
 - `requests` — HTTP fetching
 - `html2text` / `markdownify` — HTML-to-markdown conversion
 - `markitdown[pdf]` — PDF-to-markdown conversion (used by `fetch_document.py` for PDF URLs)
-- `openai` — Client library (pointed at HuggingFace endpoint)
+- `openai` — Client library used for HuggingFace backend
+- `ollama` — Client library used for Ollama backend
+- `browser-cookie3` — Auto-reads browser cookies for auth-gated URLs when no cookies file is provided

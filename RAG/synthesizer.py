@@ -1,24 +1,8 @@
 """
     Synthesize an LLM answer grounded in retrieved chunks, with inline citations.
-    Reuses the HuggingFace OpenAI-compatible client pattern from utils/generate_summary.py.
 """
 
-import os
-from openai import OpenAI
-
-from RAG.config import LLM_MODEL_ID, LLM_BASE_URL
-
-_client = None
-
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        _client = OpenAI(
-            base_url=LLM_BASE_URL,
-            api_key=os.environ["HF_TOKEN"],
-        )
-    return _client
+from utils.llm_client import complete
 
 
 def synthesize_answer(query: str, chunks: list[dict]) -> str:
@@ -58,11 +42,8 @@ Context:
 
 Answer:"""
 
-    client = _get_client()
-    completion = client.chat.completions.create(
-        model=LLM_MODEL_ID,
+    return complete(
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
         max_tokens=800,
+        temperature=0.3,
     )
-    return completion.choices[0].message.content

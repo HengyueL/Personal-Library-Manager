@@ -15,5 +15,12 @@ CHUNK_OVERLAP = 150
 TOP_K_CHUNKS = 8   # number of chunks retrieved from Chroma
 TOP_K_DOCS = 5     # number of unique documents after dedup
 
-LLM_MODEL_ID = "google/gemma-4-26B-A4B-it"
+import os
+
+LLM_MODEL_ID = os.environ.get("LLM_MODEL_ID", "google/gemma-4-26B-A4B-it")
 LLM_BASE_URL = "https://router.huggingface.co/v1"
+
+OLLAMA_HOST     = os.environ.get("OLLAMA_HOST", "https://ollama.com")
+OLLAMA_MODEL_ID = os.environ.get("OLLAMA_MODEL_ID", "gemma4:31b-cloud")
+
+BACKEND = "ollama"  # "huggingface" is the other option.

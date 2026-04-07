@@ -17,6 +17,7 @@ dependencies = [
     "sentence-transformers",
     "gradio>=4.0",
     "browser-cookie3",
+    "ollama"
 ]
 
 [project.scripts]
