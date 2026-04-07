@@ -237,7 +237,12 @@ def build_app() -> gr.Blocks:
                 )
                 refresh_btn = gr.Button("Refresh list")
                 source_url = gr.Textbox(label="Source URL", interactive=False)
-                doc_md = gr.Markdown()
+                doc_md = gr.Markdown(
+                    latex_delimiters=[
+                        {"left": "$$", "right": "$$", "display": True},
+                        {"left": "$", "right": "$", "display": False},
+                    ]
+                )
                 refresh_btn.click(
                     fn=lambda: gr.update(choices=list_documents()),
                     inputs=[],
