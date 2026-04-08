@@ -36,7 +36,7 @@ So I built this project by putting myself back into my Ph.D. shoes—sleep-depri
 ### Preparing venv and dependencies
 
 
-**Make sure** `export HF_TOKEN=<your_huggingface_token>` is configured :)
+**Make sure** `export OLLAMA_API_KEY=<your_ollama_api_key>` (more generous free API) or `export HF_TOKEN=<your_huggingface_token>` is configured :)
 
 ```bash
 uv sync  # Create venv, and install all dependecies
