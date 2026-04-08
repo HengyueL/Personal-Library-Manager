@@ -9,7 +9,7 @@ sys.path.insert(0, str(_HERE))         # quick_start/ → gui_utils/
 
 import gradio as gr
 
-from gui_utils.documents import _doc_summary_dir, list_documents
+from gui_utils.documents import _doc_summary_dir, delete_document, list_documents
 from gui_utils.streaming import _run_with_streaming
 
 CUSTOM_CSS = """
@@ -24,10 +24,11 @@ CUSTOM_CSS = """
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
 
-def add_document_handler(url: str, name: str, cookies_path: str):
+def add_document_handler(url: str, name: str, cookies_path: str, custom_prompt: str):
     url = url.strip()
     name = name.strip() if name else None
     cookies_path = cookies_path.strip() if cookies_path else None
+    custom_prompt = custom_prompt.strip() if custom_prompt else None
 
     if not url:
         yield "ERROR: Please enter a document URL."
@@ -65,10 +66,10 @@ def add_document_handler(url: str, name: str, cookies_path: str):
         if name:
             file_name = name
             print(f"Generating summary for: {file_name}")
-            summary = generate_summary(content)
+            summary = generate_summary(content, custom_prompt=custom_prompt)
         else:
             print("Generating summary and filename via LLM...")
-            summary, file_name = generate_summary_with_filename(content, url)
+            summary, file_name = generate_summary_with_filename(content, url, custom_prompt=custom_prompt)
             print(f"LLM-proposed filename: {file_name}")
         save_summary(file_name=file_name, summary_text=summary, url=url)
         print("Updating RAG index...")
@@ -102,6 +103,23 @@ def view_document_handler(file_name: str) -> tuple[str, str]:
                     url = line[4:].strip()
             raw = raw[end + 3:].strip()
     return url, raw
+
+
+def delete_document_handler(file_name: str):
+    if not file_name:
+        yield "Please select a document first."
+        return
+
+    def _work():
+        delete_document(file_name)
+
+    last = ""
+    try:
+        for chunk in _run_with_streaming(_work):
+            last = chunk
+            yield chunk
+    except Exception as e:
+        yield last + f"\nERROR: {e}"
 
 
 def query_handler(user_query: str, top_k: int, retrieval_only: bool):
@@ -190,11 +208,16 @@ def build_app() -> gr.Blocks:
                     label="Cookies file (optional — for login-gated URLs)",
                     placeholder="/path/to/cookies.txt — exported via 'Get cookies.txt LOCALLY'",
                 )
+                prompt_input = gr.Textbox(
+                    label="Custom summary instructions (optional)",
+                    placeholder="Extra instructions for the summarizer, e.g. 'Focus on the experimental methodology and results tables'. These are added on top of the default summary prompt.",
+                    lines=3,
+                )
                 add_btn = gr.Button("Add to Library", variant="primary")
                 add_output = gr.Textbox(label="Status", interactive=False, lines=8)
                 add_btn.click(
                     fn=add_document_handler,
-                    inputs=[url_input, name_input, cookies_input],
+                    inputs=[url_input, name_input, cookies_input, prompt_input],
                     outputs=add_output,
                 )
 
@@ -236,6 +259,13 @@ def build_app() -> gr.Blocks:
                     interactive=True,
                 )
                 refresh_btn = gr.Button("Refresh list")
+                with gr.Row():
+                    delete_btn = gr.Button("Delete Document", variant="stop")
+                with gr.Row(visible=False) as confirm_row:
+                    gr.Markdown("**Are you sure? This cannot be undone.**")
+                    confirm_btn = gr.Button("Yes, Delete", variant="stop")
+                    cancel_btn = gr.Button("Cancel")
+                delete_status = gr.Textbox(label="Delete Status", interactive=False, lines=3)
                 source_url = gr.Textbox(label="Source URL", interactive=False)
                 doc_md = gr.Markdown(
                     latex_delimiters=[
@@ -252,6 +282,31 @@ def build_app() -> gr.Blocks:
                     fn=view_document_handler,
                     inputs=doc_dropdown,
                     outputs=[source_url, doc_md],
+                )
+                delete_btn.click(
+                    fn=lambda: (gr.update(visible=False), gr.update(visible=True)),
+                    inputs=[],
+                    outputs=[delete_btn, confirm_row],
+                )
+                cancel_btn.click(
+                    fn=lambda: (gr.update(visible=True), gr.update(visible=False)),
+                    inputs=[],
+                    outputs=[delete_btn, confirm_row],
+                )
+                confirm_btn.click(
+                    fn=delete_document_handler,
+                    inputs=doc_dropdown,
+                    outputs=delete_status,
+                ).then(
+                    fn=lambda: (
+                        gr.update(choices=list_documents(), value=None),
+                        "",
+                        "",
+                        gr.update(visible=True),
+                        gr.update(visible=False),
+                    ),
+                    inputs=[],
+                    outputs=[doc_dropdown, source_url, doc_md, delete_btn, confirm_row],
                 )
 
             with gr.Tab("Rebuild Index"):

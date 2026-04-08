@@ -16,6 +16,8 @@ def _run_add(args) -> None:
     argv = ["add_document", "--url", args.url]
     if args.name:
         argv += ["--name", args.name]
+    if args.prompt:
+        argv += ["--prompt", args.prompt]
     sys.argv = argv
     from quick_start.add_document import main as add_main
     add_main()
@@ -56,6 +58,12 @@ def main() -> None:
         default=None,
         metavar="FILENAME",
         help="Output filename (e.g. My_Article.md). Auto-generated if omitted.",
+    )
+    add_parser.add_argument(
+        "--prompt",
+        default=None,
+        metavar="TEXT",
+        help="Additional instructions for the summarizer (appended to the default prompt).",
     )
 
     # --- plib query ---

@@ -40,12 +40,14 @@ def _parse_filename_and_summary(response: str, url: str) -> tuple[str, str]:
     return summary, filename
 
 
-def generate_summary(content: str) -> str:
+def generate_summary(content: str, custom_prompt: str | None = None) -> str:
     """
     Use LLM to generate an abstract/summary of document content.
 
     Args:
         content: Raw document text to summarize.
+        custom_prompt: Optional additional instructions appended to the
+            default summarization prompt.
 
     Returns:
         Generated summary as a string.
@@ -62,6 +64,9 @@ Please provide a well-structured summary that includes:
 
 Summary:"""
 
+    if custom_prompt:
+        prompt += f"\n\nAdditional instructions from the user:\n{custom_prompt}"
+
     return complete(
         messages=[{"role": "user", "content": prompt}],
         max_tokens=1000,
@@ -69,13 +74,15 @@ Summary:"""
     )
 
 
-def generate_summary_with_filename(content: str, url: str) -> tuple[str, str]:
+def generate_summary_with_filename(content: str, url: str, custom_prompt: str | None = None) -> tuple[str, str]:
     """
     Use LLM to generate a summary and propose a filename in a single call.
 
     Args:
         content: Raw document text to summarize.
         url: Source URL, provided to the LLM as context for naming.
+        custom_prompt: Optional additional instructions appended to the
+            default summarization prompt.
 
     Returns:
         (summary, filename) where filename follows the 'Source-Title.md' pattern.
@@ -92,6 +99,9 @@ FILENAME: <proposed-filename.md>
 
 SUMMARY:
 <well-structured summary including main topic/purpose of the document, key points and findings (arrange them in a table), and conclusions>"""
+
+    if custom_prompt:
+        prompt += f"\n\nAdditional instructions from the user:\n{custom_prompt}"
 
     response = complete(
         messages=[{"role": "user", "content": prompt}],

@@ -45,6 +45,12 @@ def main():
         metavar="FILE",
         help="Path to a Netscape cookies.txt file for login-gated URLs.",
     )
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        metavar="TEXT",
+        help="Additional instructions for the summarizer (appended to the default prompt).",
+    )
     args = parser.parse_args()
 
     logger.info("Fetching: %s", args.url)
@@ -57,10 +63,10 @@ def main():
     if args.name:
         file_name = args.name
         logger.info("Generating summary for: %s", file_name)
-        summary = generate_summary(content)
+        summary = generate_summary(content, custom_prompt=args.prompt)
     else:
         logger.info("Generating summary and filename via LLM...")
-        summary, file_name = generate_summary_with_filename(content, args.url)
+        summary, file_name = generate_summary_with_filename(content, args.url, custom_prompt=args.prompt)
         logger.info("LLM-proposed filename: %s", file_name)
 
     save_summary(file_name=file_name, summary_text=summary, url=args.url)

@@ -79,6 +79,13 @@ def index_summary_doc(file_name: str, collection) -> None:
     )
 
 
+def remove_from_index(file_name: str) -> None:
+    """Remove a single document from the Chroma index by file name."""
+    collection = get_collection(rebuild=False)
+    collection.delete(ids=[f"summary::{file_name}"])
+    print(f"Removed '{file_name}' from index.")
+
+
 def build_index(rebuild: bool = False) -> None:
     """
     Scan doc_summary/, embed and upsert documents into Chroma.
